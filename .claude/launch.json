@@ -10,9 +10,25 @@
       "port": 8377
     },
     {
+      "name": "isdash-sample",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "scripts/serve_sample.py"
+      ],
+      "port": 8378
+    },
+    {
       "name": "reports",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8399", "--bind", "127.0.0.1", "--directory", "reports"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8399",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "reports"
+      ],
       "port": 8399
     }
   ]

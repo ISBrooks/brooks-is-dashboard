@@ -1,0 +1,54 @@
+"""Run the dashboard locally on MADE-UP data:
+
+    python scripts/serve_sample.py     ->  http://127.0.0.1:8378
+
+For trying a change in a browser without touching anything real: the database
+is tests/sample_data.py's invented customers, agents and calls (rebuilt in a
+temp folder on every start), there is no sign-in, the real .env is ignored and
+the outside services have placeholder credentials, so the tabs that need
+Genesys, VoiceOps or a Google sheet show their "unavailable" state.
+"""
+import dataclasses
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tests"))
+
+import dotenv  # noqa: E402
+
+dotenv.load_dotenv = lambda *a, **k: False            # never read the real .env
+_cfg = (ROOT / "src" / "isadash" / "config.py").read_text(encoding="utf-8")
+for _name in set(re.findall(r'"([A-Z][A-Z0-9_]{3,})"', _cfg)):
+    os.environ.pop(_name, None)
+os.environ.update({
+    "PESTROUTES_BASE_URL": "https://placeholder.invalid",
+    "PESTROUTES_AUTH_KEY": "placeholder",
+    "GENESYS_CLIENT_ID": "placeholder",
+    "GENESYS_INSIDE_SALES_QUEUE_IDS": "placeholder",
+    "OUTBOUND_AGENTS": "Robin Vale",
+    "MM_DEFAULT_HOURS_AGENTS": "Robin Vale",
+    "FORM_DEDUP_WINDOW_HOURS": "336",
+    "FORM_CONVERSION_WINDOW_DAYS": "90",
+    "FORM_EXCLUDE_SOURCES": "Source 22",
+})
+
+import sample_data  # noqa: E402
+from isadash import cache, webapp  # noqa: E402
+
+if __name__ == "__main__":
+    import uvicorn
+
+    d = Path(tempfile.mkdtemp(prefix="isadash_sample_"))
+    db, fl, master = d / "isadash.sqlite", d / "attribution.sqlite", d / "sourcing_master.csv"
+    sample_data.build(db, fl, master)
+    webapp._settings = dataclasses.replace(
+        webapp._settings, db_path=db, formleads_db=str(fl), sourcing_master=str(master),
+        app_password="", admin_password="")
+    cache.configure(db)
+    print(f"sample database: {db}")
+    uvicorn.run(webapp.app, host="127.0.0.1", port=8378)

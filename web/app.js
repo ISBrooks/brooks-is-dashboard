@@ -218,9 +218,10 @@ async function init() {
     if (el) el.replaceChildren(...legendBar().childNodes);
   }
   $("#coverage").textContent = "loading data…";
-  const landing = firstAllowedTab();
-  if (landing === "home") loadHome();
-  else if (landing) showTab(landing);
+  // the tab named in the address bar if this login may open it, else the first allowed one
+  const allowedTab = (t) => !!TAB_ACCESS[t] && TAB_ACCESS[t]();
+  const landing = Router.start(firstAllowedTab(), allowedTab, showTab);
+  if (landing) showTab(landing).catch((e) => console.error(e)).then(() => Router.sync(true));
   else {
     document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
     const box = $("#no-access");
@@ -241,7 +242,11 @@ async function init() {
     `${(c.first_call || "").slice(0, 10)} → ${(c.last_call || "").slice(0, 10)} · ` +
     `updated ${updMt} MT`;
   $("#foot-note").textContent = "";
-  if (DATA.monthly) setupTrends();   // agent rows only arrive with a Phone permission
+  if (DATA.monthly) {                // agent rows only arrive with a Phone permission
+    setupTrends();
+    // opened straight on Phone -> Trends: the chart was waiting for this data
+    if ($("#sub-trends").classList.contains("active")) renderTrend();
+  }
 }
 
 function showSubTab(sub) {
@@ -778,6 +783,16 @@ async function showTab(tab) {
     showSettingsSub(document.querySelector("#settings-subtabs button.active").dataset.ssub);
   }
   if (tab === "revenue" && !REV.year) loadRevenue();
+  if (tab === "home") ensureHome();
+}
+
+// Home's data is fetched the first time Home is shown (the page can now open
+// on any tab, so that is no longer always at load).
+let HOME_LOADED = false;
+function ensureHome() {
+  if (HOME_LOADED) return;
+  HOME_LOADED = true;
+  loadHome();
 }
 
 /* ---------- revenue tab ----------
@@ -1798,11 +1813,13 @@ async function initAgentPage(previewAs) {
     meStrip.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => showMeSub(b)));
   }
   restrictStrip("#me-subtabs", "mesub", (k) => tabs.includes("me." + k));
+  Router.startAgentPage();              // open the sub-tab named in the address, if allowed
   const firstSub = meStrip.querySelector("button.active");
   if (!tabs.length) {
     $("#panel-me").querySelectorAll(".mesubpanel").forEach((p) => p.classList.remove("active"));
     $("#me-banner").replaceChildren(noData("Your login doesn't have any pages turned on yet — ask a manager."));
   } else if (firstSub && firstSub.dataset.mesub !== "numbers") { showMeSub(firstSub); }
+  Router.sync(true);
   const canNumbers = tabs.includes("me.numbers");
   if (previewAs) {
     const b = document.createElement("div"); b.className = "me-banner";
@@ -7506,6 +7523,7 @@ function colorFor(name) {
 
 function renderTrend() {
   const { metric, gran } = state.trends;
+  if (!DATA || !DATA[gran]) return;   // data still loading (or no Phone permission): init() draws it when it lands
   const ps = periods(gran).slice().reverse(); // oldest -> newest
   const series = [];
   for (const who of state.trends.agents) {

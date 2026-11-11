@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import auth, cache
@@ -345,13 +345,13 @@ catch(x){$('err-email').textContent='Could not reach the server. Try again.';}
 $('b-email').disabled=false;return false;}
 async function checkCode(e){e.preventDefault();$('b-code').disabled=true;
 try{const r=await post('/api/auth/verify',{email:EMAIL,code:$('cd').value});
-if(r.ok){location.href='/';return false;}
+if(r.ok){location.reload();return false;}
 $('err-code').textContent=await msg(r,'That code is not right or has expired.');}
 catch(x){$('err-code').textContent='Could not reach the server. Try again.';}
 $('b-code').disabled=false;return false;}
 async function go(e){e.preventDefault();
 const r=await post('/api/login',{password:$('pw').value});
-if(r.ok){location.href='/';}else{$('err-pw').textContent='Incorrect password';}
+if(r.ok){location.reload();}else{$('err-pw').textContent='Incorrect password';}
 return false;}</script></body></html>"""
 
 
@@ -6682,4 +6682,20 @@ def api_audit() -> dict:
 
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+# Every tab has its own address (web/router.js). They all serve the same page;
+# the script then opens the tab the address names. Keep this list in step with
+# the top-level words in router.js. Anything else falls through to the static
+# files below (and a 404 if it isn't one). The sign-in gate above still applies.
+_APP_PAGES = ("revenue", "agent-metrics", "team-metrics", "marketing", "schedule",
+              "payroll", "settings", "my")
+
+
+def _app_page(rest: str = "") -> FileResponse:
+    return FileResponse(WEB_DIR / "index.html")
+
+
+for _page in _APP_PAGES:
+    app.add_api_route(f"/{_page}", _app_page, methods=["GET"], include_in_schema=False)
+    app.add_api_route(f"/{_page}/{{rest:path}}", _app_page, methods=["GET"], include_in_schema=False)
+
 app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

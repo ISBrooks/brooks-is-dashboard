@@ -61,6 +61,11 @@ def no_network():
     real = socket.socket.connect
 
     def refuse(self, address, *a, **k):
+        # the in-process test client wires itself up over the machine's own
+        # loopback address; only connections that leave the machine are refused
+        host = address[0] if isinstance(address, tuple) else address
+        if host in ("127.0.0.1", "::1", "localhost"):
+            return real(self, address, *a, **k)
         raise AssertionError(f"test tried to open a network connection to {address!r}")
 
     socket.socket.connect = refuse
