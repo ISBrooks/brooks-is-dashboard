@@ -8,7 +8,9 @@ that change is brought into the repository.
 ## What happens on a push to `main`
 
 1. **GitHub Actions checks the code** (`.github/workflows/deploy.yml`): installs the
-   pinned packages, compiles every Python file, parses `web/app.js`, and imports the app.
+   pinned packages, compiles every Python file, parses `web/app.js`, imports the app,
+   and runs the tests in `tests/` (every data feed against a made-up sample database,
+   compared with the saved numbers in `tests/snapshots/`).
 2. If that passes and the repository variable `DEPLOY_ENABLED` is `true`, GitHub
    connects to the droplet with a key that can run **one command only**:
    `/usr/local/bin/isdash-deploy` (source: `deploy/isdash-deploy.sh`).
@@ -35,6 +37,35 @@ Every deploy is logged on the droplet in `/var/log/isdash-deploy.log`.
 - To pause deploys: set the repository variable `DEPLOY_ENABLED` to `false`.
 - A restart takes the site down for a few seconds. Avoid pushing Python changes
   while agents are clocking in or out at the top of a shift.
+
+## Running the tests yourself
+
+```
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+If a change moves a number on purpose (a rule change), regenerate the saved
+numbers and review the difference in git before committing it:
+`UPDATE_SNAPSHOTS=1 python -m pytest tests/test_money_numbers.py`
+
+## If GitHub Actions is stuck
+
+On 2026-11-11 GitHub left runs "queued" for a long time with no machine assigned.
+The deploy does not depend on it: run the same checks on a clean copy of the
+pushed commit, then start the droplet's deploy script directly with the root key.
+It still pulls `main` from GitHub and does every safety check listed above.
+
+```
+ssh root@DROPLET /usr/local/bin/isdash-deploy deploy
+ssh root@DROPLET /usr/local/bin/isdash-deploy status
+```
+
+## Web server
+
+Caddy (`/etc/caddy/Caddyfile` on the droplet, not in git) serves only this site:
+it compresses responses (`encode zstd gzip`) and passes them to the app on
+127.0.0.1:8377. Backups of earlier versions sit next to it as `Caddyfile.bak-*`.
 
 ## What is NOT in git (and a deploy never touches)
 
