@@ -86,9 +86,18 @@ d=json.load(open(sys.argv[1])); print(d.get("state") or "-", d.get("pid") or "-"
   }
 
   # compile every file, then import the app the way the service does
+  # Compiled files go to a throwaway folder: a few __pycache__ files in the app
+  # folder are root-owned (left by scripts once run as root) and can't be rewritten
+  # by the app's user, which would fail this check for no real reason.
   preflight() {
-    as_app "$PY" -m compileall -q "$APP/src" "$APP/scripts" >/dev/null || return 1
-    (cd "$APP" && as_app "$PY" -c 'import sys; sys.path.insert(0, "src"); import isadash.webapp') || return 1
+    local pyc rc=0
+    pyc=$(as_app mktemp -d)
+    as_app env PYTHONPYCACHEPREFIX="$pyc" "$PY" -m compileall -q "$APP/src" "$APP/scripts" || rc=1
+    if [ "$rc" = 0 ]; then
+      (cd "$APP" && as_app env PYTHONPYCACHEPREFIX="$pyc" "$PY" -c 'import sys; sys.path.insert(0, "src"); import isadash.webapp') || rc=1
+    fi
+    as_app rm -rf "$pyc"
+    return "$rc"
   }
 
   if [ "$cmd" = "status" ]; then
