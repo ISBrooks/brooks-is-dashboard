@@ -34,6 +34,7 @@ from .report import Bucket, aggregate, week_to_date_label
 from .store import connect
 
 app = FastAPI(title="Brooks IS Dashboard")
+log = logging.getLogger("isadash.webapp")
 _settings = load_settings()
 cache.configure(_settings.db_path)
 
@@ -2595,7 +2596,9 @@ def api_agentsubs() -> dict:
 
     weekly: dict[str, dict[str, dict]] = {}
     monthly: dict[str, dict[str, dict]] = {}
-    for agent, added, months, cv, status, ip in subs:
+    # _roster_sub_rows gained a 7th value (signed agreement) and this feed was
+    # never updated, so it had been failing; nothing on the page uses it today
+    for agent, added, months, cv, status, ip, *_ in subs:
         dt = datetime.fromisoformat(added)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
@@ -5031,6 +5034,7 @@ def api_settings_update(body: dict, request: Request) -> dict:
         resolved = None
         # promoting to key with no FR ids yet -> resolve them from FieldRoutes
         if body.get("scorecard") and not cur["fr_employee_id"]:
+            from .fieldroutes import FieldRoutesClient
             fr = FieldRoutesClient(_settings.pestroutes_base_url,
                                    _settings.pestroutes_auth_key,
                                    _settings.pestroutes_auth_token)

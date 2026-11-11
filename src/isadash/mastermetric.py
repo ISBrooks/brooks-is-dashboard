@@ -20,6 +20,7 @@ Formulas mirror the manual "Daily Tracker - MM" sheet:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import date, datetime, timedelta, timezone
 
