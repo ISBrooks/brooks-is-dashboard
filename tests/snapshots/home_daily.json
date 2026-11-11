@@ -1,0 +1,130 @@
+{
+ "days": [
+  {
+   "acv": 973.75,
+   "aip": 204.89,
+   "date": "2026-11-03",
+   "form": {
+    "conv": 0,
+    "net": 4,
+    "pct": 0.0
+   },
+   "multiyear_pct": 100.0,
+   "quality": {
+    "agents": 0,
+    "calls": 0,
+    "pct": null
+   },
+   "signed_pct": 100.0,
+   "subs": 3
+  },
+  {
+   "acv": 1022.52,
+   "aip": 162.02,
+   "date": "2026-11-04",
+   "form": {
+    "conv": 0,
+    "net": 5,
+    "pct": 0.0
+   },
+   "multiyear_pct": 75.0,
+   "quality": {
+    "agents": 0,
+    "calls": 0,
+    "pct": null
+   },
+   "signed_pct": 50.0,
+   "subs": 8
+  },
+  {
+   "acv": 790.92,
+   "aip": 162.28,
+   "date": "2026-11-05",
+   "form": {
+    "conv": 0,
+    "net": 8,
+    "pct": 0.0
+   },
+   "multiyear_pct": 57.1,
+   "quality": {
+    "agents": 0,
+    "calls": 0,
+    "pct": null
+   },
+   "signed_pct": 83.3,
+   "subs": 7
+  },
+  {
+   "acv": 1209.76,
+   "aip": 158.09,
+   "date": "2026-11-06",
+   "form": {
+    "conv": 0,
+    "net": 3,
+    "pct": 0.0
+   },
+   "multiyear_pct": 42.9,
+   "quality": {
+    "agents": 0,
+    "calls": 0,
+    "pct": null
+   },
+   "signed_pct": 71.4,
+   "subs": 7
+  },
+  {
+   "acv": 886.78,
+   "aip": 188.13,
+   "date": "2026-11-07",
+   "form": {
+    "conv": 0,
+    "net": 6,
+    "pct": 0.0
+   },
+   "multiyear_pct": 28.6,
+   "quality": {
+    "agents": 0,
+    "calls": 0,
+    "pct": null
+   },
+   "signed_pct": 83.3,
+   "subs": 7
+  },
+  {
+   "acv": 1058.97,
+   "aip": 164.95,
+   "date": "2026-11-08",
+   "form": {
+    "conv": 0,
+    "net": 6,
+    "pct": 0.0
+   },
+   "multiyear_pct": 60.0,
+   "quality": {
+    "agents": 0,
+    "calls": 0,
+    "pct": null
+   },
+   "signed_pct": 75.0,
+   "subs": 5
+  },
+  {
+   "acv": 1168.92,
+   "aip": 208.26,
+   "date": "2026-11-09",
+   "form": {
+    "conv": 0,
+    "net": 2,
+    "pct": 0.0
+   },
+   "multiyear_pct": 33.3,
+   "quality": {
+    "agents": 0,
+    "calls": 0,
+    "pct": null
+   },
+   "signed_pct": 50.0,
+   "subs": 6
+  }
+ ]
+}

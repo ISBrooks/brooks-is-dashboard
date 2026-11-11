@@ -230,6 +230,20 @@ def mapped_roster(conn) -> list[tuple[str, str]]:
         "ORDER BY genesys_name")]
 
 
+def needs_refresh(conn, start_day: str, end_day: str, *, settle_days: int = 3,
+                  max_age_h: float = 1.0) -> bool:
+    """True when the period is still live (ends within settle_days of today, or
+    later) and a saved score for it is older than max_age_h - the same test
+    cached_scores applies before re-pulling."""
+    today_pac = datetime.now(PACIFIC).date()
+    if end_day < (today_pac - timedelta(days=settle_days)).isoformat():
+        return False
+    cutoff = (datetime.now(UTC) - timedelta(hours=max_age_h)).isoformat()
+    row = conn.execute("SELECT MIN(fetched_at) FROM voiceops_scores "
+                       "WHERE start_day = ? AND end_day = ?", (start_day, end_day)).fetchone()
+    return bool(row and row[0] and row[0] < cutoff)
+
+
 def cached_scores(conn, client: "VoiceOpsClient | None", start_day: str, end_day: str,
                   *, refresh: bool = False, settle_days: int = 3,
                   max_age_h: float = 1.0) -> dict[str, dict]:

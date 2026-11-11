@@ -26,8 +26,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install the app's packages
-        run: pip install -r requirements.txt
+          cache-dependency-path: requirements*.txt
+      - name: Install the app's packages and the test tools
+        run: pip install -r requirements-dev.txt
       - name: Python files compile
         run: python -m compileall -q src scripts deploy
       - name: Page script parses
@@ -46,6 +47,10 @@ jobs:
           GENESYS_INSIDE_SALES_QUEUE_IDS: placeholder
         run: |
           PYTHONPATH=src python -c "import isadash.webapp as w; print(len(w.app.routes), 'routes')"
+      - name: Money numbers and counting rules
+        # runs every data feed against a made-up sample database and compares the
+        # numbers with tests/snapshots; see tests/test_money_numbers.py
+        run: python -m pytest
 
   deploy:
     name: Deploy to the droplet

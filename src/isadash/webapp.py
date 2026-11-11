@@ -18,6 +18,7 @@ import hashlib
 import html as _html
 import hmac
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -473,6 +474,9 @@ def _warm_calls() -> list:
         # the page builds this range in the browser: Jan 1 .. today's UTC date
         (api_scorecard, {"start_day": f"{year}-01-01", "end_day": now.date().isoformat(), "mode": "sold"}),
         (api_revenue, {"year": year}),      # behind /api/home_ytd
+        (api_home_quality, {}),
+        (api_home_servicelevel, {}),
+        (_team_overview_db, {}),            # Team Metrics -> Team Overview
     ]
 
 
@@ -2151,7 +2155,10 @@ def api_revenue_overview(by: str = "agent") -> dict:
         conn.close()
 
 
+# Genesys is asked at most every 30 minutes (the windows are whole days ending
+# yesterday, so the answer barely moves); an error answer is never saved.
 @app.get("/api/home_servicelevel")
+@cache.cached(ttl=1800, keep=lambda v: isinstance(v, dict))
 def api_home_servicelevel() -> dict:
     """Genesys service level (30d + 7d + weekly trend) for the home row. Kept in
     its own endpoint so the DB-driven home renders instantly and this fills in
@@ -4110,6 +4117,7 @@ def api_my_power(request: Request, period: str = "current", as_agent: str = "",
 
 
 @app.get("/api/home_quality")
+@cache.cached()
 def api_home_quality() -> dict:
     """VoiceOps quality score for the Home row: 30d + 7d bubbles and the 13-week
     trend. Served entirely from the voiceops_scores cache (the nightly sync warms
@@ -4300,6 +4308,42 @@ def api_powerscore_export(body: dict):
         headers={"Content-Disposition": f'attachment; filename="PowerScore_{mode}_{sd}_{ed}.xlsx"'})
 
 
+_quality_refreshing: set = set()
+_quality_refresh_lock = threading.Lock()
+
+
+def _refresh_quality_in_background(sd: str, ed: str) -> None:
+    """Re-pull one period's VoiceOps scores on a side thread (one at a time
+    per period). cached_scores commits per agent, so nothing is held open
+    across the vendor calls."""
+    key = (sd, ed)
+    with _quality_refresh_lock:
+        if key in _quality_refreshing:
+            return
+        _quality_refreshing.add(key)
+
+    def run():
+        from .voiceops import VoiceOpsClient, cached_scores
+        t0 = time.perf_counter()
+        try:
+            client = VoiceOpsClient(_settings.voiceops_client_id, _settings.voiceops_client_secret)
+            conn = connect(_settings.db_path)
+            try:
+                cached_scores(conn, client, sd, ed)
+            finally:
+                conn.close()
+                client.close()
+            _perf_log.info("quality: refreshed %s..%s in the background (%.0f s)",
+                           sd, ed, time.perf_counter() - t0)
+        except Exception:  # noqa: BLE001 - a failed refresh just leaves the saved scores in place
+            logging.getLogger("isadash.quality").exception("background quality refresh failed")
+        finally:
+            with _quality_refresh_lock:
+                _quality_refreshing.discard(key)
+
+    threading.Thread(target=run, name="quality-refresh", daemon=True).start()
+
+
 @app.get("/api/quality")
 def api_quality(start_day: str = "", end_day: str = "", days: int = 30,
                 fetch: int = 1) -> dict:
@@ -4317,7 +4361,8 @@ def api_quality(start_day: str = "", end_day: str = "", days: int = 30,
     from datetime import timedelta
 
     from .periods import PACIFIC
-    from .voiceops import (VoiceOpsClient, cached_scores, weighted_quality)
+    from .voiceops import (VoiceOpsClient, cached_scores, mapped_roster,
+                           needs_refresh, weighted_quality)
 
     if start_day and end_day:
         sd, ed = start_day, end_day
@@ -4331,15 +4376,24 @@ def api_quality(start_day: str = "", end_day: str = "", days: int = 30,
     try:
         team_of = {r["genesys_name"]: r["team"] for r in conn.execute(
             "SELECT genesys_name, team FROM agent_map WHERE scorecard = 1")}
-        client = None
-        if fetch and _settings.voiceops_client_id and _settings.voiceops_client_secret:
-            client = VoiceOpsClient(_settings.voiceops_client_id,
-                                    _settings.voiceops_client_secret)
-        try:
-            scores = cached_scores(conn, client, sd, ed)
-        finally:
-            if client is not None:
-                client.close()
+        live = bool(fetch and _settings.voiceops_client_id and _settings.voiceops_client_secret)
+        scores = cached_scores(conn, None, sd, ed)          # whatever is saved, any age
+        if live:
+            roster = [n for n, _e in mapped_roster(conn)]
+            if roster and all(n in scores for n in roster):
+                # Everyone has a saved score: show it now. If the period is still
+                # live and those scores are over an hour old, re-pull them in the
+                # background. (Before 2026-11-11 the visitor waited for the whole
+                # re-pull: ~27 VoiceOps calls, 30+ seconds on an agent's page.)
+                if needs_refresh(conn, sd, ed):
+                    _refresh_quality_in_background(sd, ed)
+            else:                                           # never pulled: nothing to show yet
+                client = VoiceOpsClient(_settings.voiceops_client_id,
+                                        _settings.voiceops_client_secret)
+                try:
+                    scores = cached_scores(conn, client, sd, ed)
+                finally:
+                    client.close()
 
         agents = {name: {"quality": s.get("quality_score"),
                          "calls": s.get("call_count")}
@@ -4744,12 +4798,12 @@ _TEAM_OV_METRICS = ("total_revenue", "total_sales", "outbound_sales", "total_lea
                     "multi24_pct", "multi18_pct", "sts_pct", "avg_initial", "apay_pct",
                     "monthly_billing_pct", "signed_doc_pct", "quality_score")
 _TEAM_OV_CALLS = ("calls_taken", "calls_missed", "ans_missed", "avg_talk_s", "avg_acw_s")
-_team_ov_cache: dict = {"key": None, "payload": None}
+@cache.cached()
+def _team_overview_db() -> dict:
+    """The database part of Team Overview (everything except the Genesys
+    call-handling cards, which api_team_overview adds per request).
 
-
-@app.get("/api/team_overview")
-def api_team_overview() -> dict:
-    """Team Metrics -> Team Overview cards: every team metric for the whole
+    Team Metrics -> Team Overview cards: every team metric for the whole
     team, Josh's team and Kai's team over the last 30 and 7 COMPLETE days
     (each against the period before it) plus a 13-week trend. Sold between,
     the same as Home. Built from the same per-range function the any-dates
@@ -4759,10 +4813,6 @@ def api_team_overview() -> dict:
     from .periods import PACIFIC
     from .voiceops import pacific_weeks
     today = datetime.now(timezone.utc).astimezone(PACIFIC).date()
-    mtime = _settings.db_path.stat().st_mtime if _settings.db_path.exists() else 0
-    key = (today.isoformat(), mtime)
-    if _team_ov_cache["key"] == key:
-        return _team_ov_cache["payload"]
     end = today - timedelta(days=1)
 
     def win(days: int, back: int) -> tuple[str, str]:
@@ -4790,10 +4840,22 @@ def api_team_overview() -> dict:
                     for m in _TEAM_OV_METRICS}
         teams[t]["_sales"] = {"d30": w["d30"][t].get("total_sales"),
                               "d7": w["d7"][t].get("total_sales")}
+    return {"ranges": ranges, "weeks": weeks, "teams": teams, "end": end.isoformat()}
+
+
+@app.get("/api/team_overview")
+def api_team_overview() -> dict:
+    """Team Overview cards. The database part is saved until its data changes
+    (_team_overview_db, ~5 s to build); the Genesys call-handling cards are
+    added here on every request from Genesys's own short-lived cache, so a
+    Genesys hiccup is never saved."""
+    from datetime import date as _date
+    core = _team_overview_db()           # a private copy: safe to add to
+    ranges, weeks, teams = core["ranges"], core["weeks"], core["teams"]
+    end = _date.fromisoformat(core["end"])
     # Genesys call handling per team (calls taken / missed, talk, after-call
     # work): one per-day pull covers every window, summed over each team's reps
     try:
-        from datetime import date as _date
 
         from . import mastermetric
         first = min(ranges["p30"][0], weeks[0][0] if weeks else ranges["p30"][0])
@@ -4829,7 +4891,6 @@ def api_team_overview() -> dict:
         logging.getLogger("isadash.teamoverview").exception("team overview: Genesys part failed")
     payload = {"ranges": {k: {"start": v[0], "end": v[1]} for k, v in ranges.items()},
                "weeks": [s for s, _ in weeks], "teams": teams}
-    _team_ov_cache.update(key=key, payload=payload)
     return payload
 
 
@@ -6522,16 +6583,11 @@ def _week_utc_bounds(label: str) -> tuple[str, str]:
             end_local.astimezone(UTC).isoformat())
 
 
-_audit_cache: dict = {"mtime": None, "payload": None}
-
-
 @app.get("/api/audit")
+@cache.cached(copy_result=False)     # large and read-only: shared, as it always was
 def api_audit() -> dict:
     """Audited (human) qualified/sales vs system dispositions/conversions,
     weekly Sun–Sat per agent, plus hidden/leaked adjustment terms."""
-    mtime = _settings.db_path.stat().st_mtime if _settings.db_path.exists() else 0
-    if _audit_cache["mtime"] == mtime:
-        return _audit_cache["payload"]
     from datetime import timezone as _tz
 
     from .adjust import adjustment_stats
@@ -6620,10 +6676,7 @@ def api_audit() -> dict:
         for w in sorted(weeks):
             for agent in sorted(weeks[w]):
                 rows.append({"period": w, "agent": agent, **weeks[w][agent]})
-        payload = {"rows": rows, "has_data": bool(rows)}
-        _audit_cache["payload"] = payload
-        _audit_cache["mtime"] = mtime
-        return payload
+        return {"rows": rows, "has_data": bool(rows)}
     finally:
         conn.close()
 

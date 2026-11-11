@@ -1,0 +1,250 @@
+{
+ "end": "2026-10-24",
+ "rows": [
+  {
+   "acv": 998.0,
+   "agent": "Avery Stone",
+   "aip": 179.22,
+   "apay_pct": 75.0,
+   "call_grade": null,
+   "conversion_pct": 22.0,
+   "monthly_pct": 82.4,
+   "multi18_pct": 11.8,
+   "multi24_pct": 41.2,
+   "multi_total_pct": 52.9,
+   "outbound_subs": 13,
+   "powerscore": true,
+   "rev": 16974.4,
+   "rev_all": 14509.06,
+   "signed_pct": 92.3,
+   "sts_pct": 73.9,
+   "subs": 17,
+   "team": "josh"
+  },
+  {
+   "acv": 1134.0,
+   "agent": "Blake Rivers",
+   "aip": 192.04,
+   "apay_pct": 81.8,
+   "call_grade": null,
+   "conversion_pct": 32.7,
+   "monthly_pct": 90.9,
+   "multi18_pct": 18.2,
+   "multi24_pct": 36.4,
+   "multi_total_pct": 54.5,
+   "outbound_subs": 10,
+   "powerscore": true,
+   "rev": 11337.28,
+   "rev_all": 11017.05,
+   "signed_pct": 60.0,
+   "sts_pct": 61.1,
+   "subs": 11,
+   "team": "josh"
+  },
+  {
+   "acv": 765.0,
+   "agent": "Casey Flint",
+   "aip": 238.8,
+   "apay_pct": 100.0,
+   "call_grade": null,
+   "conversion_pct": 19.3,
+   "monthly_pct": 83.3,
+   "multi18_pct": 0.0,
+   "multi24_pct": 33.3,
+   "multi_total_pct": 33.3,
+   "outbound_subs": 5,
+   "powerscore": true,
+   "rev": 4588.78,
+   "rev_all": 6229.7,
+   "signed_pct": 60.0,
+   "sts_pct": 85.7,
+   "subs": 6,
+   "team": "josh"
+  },
+  {
+   "acv": 1229.0,
+   "agent": "Devon Marsh",
+   "aip": 174.47,
+   "apay_pct": 50.0,
+   "call_grade": null,
+   "conversion_pct": 31.7,
+   "monthly_pct": 86.4,
+   "multi18_pct": 31.8,
+   "multi24_pct": 31.8,
+   "multi_total_pct": 63.6,
+   "outbound_subs": 17,
+   "powerscore": true,
+   "rev": 27040.3,
+   "rev_all": 25014.43,
+   "signed_pct": 73.3,
+   "sts_pct": 84.6,
+   "subs": 22,
+   "team": "josh"
+  },
+  {
+   "acv": 1187.0,
+   "agent": "Emery Lake",
+   "aip": 206.82,
+   "apay_pct": 70.0,
+   "call_grade": null,
+   "conversion_pct": 19.5,
+   "monthly_pct": 70.0,
+   "multi18_pct": 10.0,
+   "multi24_pct": 30.0,
+   "multi_total_pct": 40.0,
+   "outbound_subs": 8,
+   "powerscore": true,
+   "rev": 10683.09,
+   "rev_all": 8760.49,
+   "signed_pct": 71.4,
+   "sts_pct": 71.4,
+   "subs": 10,
+   "team": "kai"
+  },
+  {
+   "acv": 951.0,
+   "agent": "Finley Shaw",
+   "aip": 157.75,
+   "apay_pct": 61.1,
+   "call_grade": null,
+   "conversion_pct": 27.1,
+   "monthly_pct": 84.2,
+   "multi18_pct": 26.3,
+   "multi24_pct": 36.8,
+   "multi_total_pct": 63.2,
+   "outbound_subs": 11,
+   "powerscore": true,
+   "rev": 17121.17,
+   "rev_all": 20387.73,
+   "signed_pct": 85.7,
+   "sts_pct": 90.5,
+   "subs": 19,
+   "team": "kai"
+  },
+  {
+   "acv": 933.0,
+   "agent": "Harper Quinn",
+   "aip": 200.2,
+   "apay_pct": 83.3,
+   "call_grade": null,
+   "conversion_pct": 23.6,
+   "monthly_pct": 83.3,
+   "multi18_pct": 0.0,
+   "multi24_pct": 50.0,
+   "multi_total_pct": 50.0,
+   "outbound_subs": 6,
+   "powerscore": true,
+   "rev": 5595.01,
+   "rev_all": 5595.01,
+   "signed_pct": 50.0,
+   "sts_pct": 85.7,
+   "subs": 6,
+   "team": "kai"
+  },
+  {
+   "acv": 818.0,
+   "agent": "Robin Vale",
+   "aip": 160.84,
+   "apay_pct": 100.0,
+   "call_grade": null,
+   "conversion_pct": 21.9,
+   "monthly_pct": 75.0,
+   "multi18_pct": 0.0,
+   "multi24_pct": 50.0,
+   "multi_total_pct": 50.0,
+   "outbound_subs": 4,
+   "powerscore": false,
+   "rev": 6541.41,
+   "rev_all": 6787.25,
+   "signed_pct": 83.3,
+   "sts_pct": 72.7,
+   "subs": 8,
+   "team": "kai"
+  }
+ ],
+ "start": "2026-10-11",
+ "team": {
+  "acv": 1040.0,
+  "agent": "Team average",
+  "aip": 180.5,
+  "apay_pct": 71.3,
+  "call_grade": null,
+  "conversion_pct": 24.8,
+  "monthly_pct": 82.8,
+  "multi18_pct": 17.2,
+  "multi24_pct": 37.4,
+  "multi_total_pct": 54.5,
+  "outbound_subs": 9.2,
+  "rev": 12485.18,
+  "signed_pct": 75.0,
+  "sts_pct": 78.0,
+  "subs": 12.4
+ },
+ "tiers": {
+  "acv": {
+   "min": 650,
+   "t1": 750,
+   "t2": 710
+  },
+  "aip": {
+   "min": null,
+   "t1": null,
+   "t2": null
+  },
+  "ans_missed": {
+   "min": null,
+   "t1": null,
+   "t2": null
+  },
+  "avg_acw_s": {
+   "min": null,
+   "t1": null,
+   "t2": null
+  },
+  "call_grade": {
+   "min": 70,
+   "t1": 90,
+   "t2": 80
+  },
+  "conversion_pct": {
+   "min": 55,
+   "t1": 75,
+   "t2": 70
+  },
+  "mm": {
+   "min": null,
+   "t1": null,
+   "t2": null
+  },
+  "monthly_pct": {
+   "min": 70,
+   "t1": 70,
+   "t2": 70
+  },
+  "multi24_pct": {
+   "min": 15,
+   "t1": 40,
+   "t2": 25
+  },
+  "multi_total_pct": {
+   "min": 50,
+   "t1": 65,
+   "t2": 60
+  },
+  "quality_score": {
+   "min": null,
+   "t1": null,
+   "t2": null
+  },
+  "signed_pct": {
+   "min": null,
+   "t1": null,
+   "t2": null
+  },
+  "sts_pct": {
+   "min": null,
+   "t1": null,
+   "t2": null
+  }
+ }
+}

@@ -214,6 +214,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         # the commission engine reads this (read-only) for RULES §1a
         conn.execute("ALTER TABLE commission_roster ADD COLUMN start_date TEXT")
     have_am = {r[1] for r in conn.execute("PRAGMA table_info(agent_map)")}
+    # These four were added to the live database by hand long ago and no code
+    # created them, so a brand-new database (tests, a rebuild) couldn't run the
+    # app. Same definitions as production.
+    for col, decl in (("scorecard", "INTEGER DEFAULT 0"), ("powerscore", "INTEGER DEFAULT 0"),
+                      ("active", "INTEGER DEFAULT 1"), ("team", "TEXT")):
+        if col not in have_am:
+            conn.execute(f"ALTER TABLE agent_map ADD COLUMN {col} {decl}")
     if "voiceops_email" not in have_am:
         # VoiceOps identifies reps by EMAIL, and they are personal addresses
         # (gmail/outlook/icloud) rather than Genesys ids or company mail — so

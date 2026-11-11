@@ -1,0 +1,98 @@
+{
+ "calls_from": "2025-06-21",
+ "end": "2026-10-31",
+ "notes": [],
+ "rows": [
+  {
+   "agent": "Devon Marsh",
+   "inbound": 21690.63,
+   "n_inbound": 19,
+   "n_other": 39,
+   "n_subs": 58,
+   "other": 43558.87,
+   "pct_inbound": 33.2,
+   "total": 65249.5
+  },
+  {
+   "agent": "Finley Shaw",
+   "inbound": 26971.66,
+   "n_inbound": 24,
+   "n_other": 30,
+   "n_subs": 54,
+   "other": 28787.34,
+   "pct_inbound": 48.4,
+   "total": 55759.0
+  },
+  {
+   "agent": "Avery Stone",
+   "inbound": 14395.66,
+   "n_inbound": 13,
+   "n_other": 27,
+   "n_subs": 40,
+   "other": 27918.15,
+   "pct_inbound": 34.0,
+   "total": 42313.81
+  },
+  {
+   "agent": "Blake Rivers",
+   "inbound": 7874.92,
+   "n_inbound": 10,
+   "n_other": 27,
+   "n_subs": 37,
+   "other": 28367.02,
+   "pct_inbound": 21.7,
+   "total": 36241.94
+  },
+  {
+   "agent": "Emery Lake",
+   "inbound": 10611.43,
+   "n_inbound": 10,
+   "n_other": 17,
+   "n_subs": 27,
+   "other": 19949.97,
+   "pct_inbound": 34.7,
+   "total": 30561.4
+  },
+  {
+   "agent": "Casey Flint",
+   "inbound": 7017.64,
+   "n_inbound": 8,
+   "n_other": 14,
+   "n_subs": 22,
+   "other": 12236.8,
+   "pct_inbound": 36.4,
+   "total": 19254.44
+  },
+  {
+   "agent": "Harper Quinn",
+   "inbound": 4020.64,
+   "n_inbound": 3,
+   "n_other": 12,
+   "n_subs": 15,
+   "other": 13166.61,
+   "pct_inbound": 23.4,
+   "total": 17187.25
+  },
+  {
+   "agent": "Robin Vale",
+   "inbound": 5397.28,
+   "n_inbound": 6,
+   "n_other": 12,
+   "n_subs": 18,
+   "other": 11140.87,
+   "pct_inbound": 32.6,
+   "total": 16538.15
+  }
+ ],
+ "start": "2026-10-01",
+ "team": {
+  "agent": "Team",
+  "inbound": 97979.86,
+  "n_inbound": 93,
+  "n_other": 178,
+  "n_subs": 271,
+  "other": 185125.63,
+  "pct_inbound": 34.6,
+  "total": 283105.49
+ }
+}

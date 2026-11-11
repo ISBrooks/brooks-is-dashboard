@@ -1,0 +1,351 @@
+{
+ "conversion_window_days": 90,
+ "customers_loaded": 2500,
+ "dedup_window_hours": 336,
+ "monthly": [
+  {
+   "conv_pct": 2.6,
+   "converted": 1,
+   "deduped": 48,
+   "existing": 10,
+   "forms": 49,
+   "net": 38,
+   "period": "2026-04"
+  },
+  {
+   "conv_pct": 1.2,
+   "converted": 2,
+   "deduped": 191,
+   "existing": 30,
+   "forms": 193,
+   "net": 161,
+   "period": "2026-05"
+  },
+  {
+   "conv_pct": 2.5,
+   "converted": 4,
+   "deduped": 197,
+   "existing": 39,
+   "forms": 203,
+   "net": 158,
+   "period": "2026-06"
+  },
+  {
+   "conv_pct": 4.5,
+   "converted": 7,
+   "deduped": 187,
+   "existing": 32,
+   "forms": 192,
+   "net": 155,
+   "period": "2026-07"
+  },
+  {
+   "conv_pct": 5.2,
+   "converted": 7,
+   "deduped": 162,
+   "existing": 28,
+   "forms": 165,
+   "net": 134,
+   "period": "2026-08"
+  },
+  {
+   "conv_pct": 2.1,
+   "converted": 3,
+   "deduped": 180,
+   "existing": 35,
+   "forms": 188,
+   "net": 145,
+   "period": "2026-09"
+  },
+  {
+   "conv_pct": 2.2,
+   "converted": 3,
+   "deduped": 178,
+   "existing": 42,
+   "forms": 183,
+   "net": 136,
+   "period": "2026-10"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 71,
+   "existing": 17,
+   "forms": 72,
+   "net": 54,
+   "period": "2026-11"
+  }
+ ],
+ "weekly": [
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 9,
+   "existing": 1,
+   "forms": 9,
+   "net": 8,
+   "period": "2026-04-19..2026-04-25"
+  },
+  {
+   "conv_pct": 2.6,
+   "converted": 1,
+   "deduped": 50,
+   "existing": 11,
+   "forms": 51,
+   "net": 39,
+   "period": "2026-04-26..2026-05-02"
+  },
+  {
+   "conv_pct": 2.9,
+   "converted": 1,
+   "deduped": 39,
+   "existing": 5,
+   "forms": 39,
+   "net": 34,
+   "period": "2026-05-03..2026-05-09"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 43,
+   "existing": 8,
+   "forms": 44,
+   "net": 35,
+   "period": "2026-05-10..2026-05-16"
+  },
+  {
+   "conv_pct": 2.2,
+   "converted": 1,
+   "deduped": 54,
+   "existing": 8,
+   "forms": 54,
+   "net": 46,
+   "period": "2026-05-17..2026-05-23"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 37,
+   "existing": 6,
+   "forms": 38,
+   "net": 31,
+   "period": "2026-05-24..2026-05-30"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 45,
+   "existing": 8,
+   "forms": 45,
+   "net": 37,
+   "period": "2026-05-31..2026-06-06"
+  },
+  {
+   "conv_pct": 5.7,
+   "converted": 2,
+   "deduped": 43,
+   "existing": 8,
+   "forms": 45,
+   "net": 35,
+   "period": "2026-06-07..2026-06-13"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 47,
+   "existing": 10,
+   "forms": 50,
+   "net": 37,
+   "period": "2026-06-14..2026-06-20"
+  },
+  {
+   "conv_pct": 5.7,
+   "converted": 2,
+   "deduped": 46,
+   "existing": 11,
+   "forms": 46,
+   "net": 35,
+   "period": "2026-06-21..2026-06-27"
+  },
+  {
+   "conv_pct": 2.2,
+   "converted": 1,
+   "deduped": 52,
+   "existing": 7,
+   "forms": 53,
+   "net": 45,
+   "period": "2026-06-28..2026-07-04"
+  },
+  {
+   "conv_pct": 7.7,
+   "converted": 2,
+   "deduped": 34,
+   "existing": 8,
+   "forms": 36,
+   "net": 26,
+   "period": "2026-07-05..2026-07-11"
+  },
+  {
+   "conv_pct": 5.0,
+   "converted": 2,
+   "deduped": 46,
+   "existing": 6,
+   "forms": 46,
+   "net": 40,
+   "period": "2026-07-12..2026-07-18"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 41,
+   "existing": 8,
+   "forms": 42,
+   "net": 33,
+   "period": "2026-07-19..2026-07-25"
+  },
+  {
+   "conv_pct": 5.9,
+   "converted": 2,
+   "deduped": 41,
+   "existing": 7,
+   "forms": 43,
+   "net": 34,
+   "period": "2026-07-26..2026-08-01"
+  },
+  {
+   "conv_pct": 6.5,
+   "converted": 2,
+   "deduped": 34,
+   "existing": 3,
+   "forms": 35,
+   "net": 31,
+   "period": "2026-08-02..2026-08-08"
+  },
+  {
+   "conv_pct": 3.2,
+   "converted": 1,
+   "deduped": 39,
+   "existing": 8,
+   "forms": 40,
+   "net": 31,
+   "period": "2026-08-09..2026-08-15"
+  },
+  {
+   "conv_pct": 7.1,
+   "converted": 2,
+   "deduped": 36,
+   "existing": 8,
+   "forms": 37,
+   "net": 28,
+   "period": "2026-08-16..2026-08-22"
+  },
+  {
+   "conv_pct": 3.6,
+   "converted": 1,
+   "deduped": 34,
+   "existing": 6,
+   "forms": 34,
+   "net": 28,
+   "period": "2026-08-23..2026-08-29"
+  },
+  {
+   "conv_pct": 2.8,
+   "converted": 1,
+   "deduped": 47,
+   "existing": 11,
+   "forms": 49,
+   "net": 36,
+   "period": "2026-08-30..2026-09-05"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 38,
+   "existing": 7,
+   "forms": 40,
+   "net": 31,
+   "period": "2026-09-06..2026-09-12"
+  },
+  {
+   "conv_pct": 6.2,
+   "converted": 2,
+   "deduped": 38,
+   "existing": 6,
+   "forms": 39,
+   "net": 32,
+   "period": "2026-09-13..2026-09-19"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 51,
+   "existing": 11,
+   "forms": 54,
+   "net": 40,
+   "period": "2026-09-20..2026-09-26"
+  },
+  {
+   "conv_pct": 2.9,
+   "converted": 1,
+   "deduped": 40,
+   "existing": 5,
+   "forms": 40,
+   "net": 35,
+   "period": "2026-09-27..2026-10-03"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 40,
+   "existing": 13,
+   "forms": 41,
+   "net": 27,
+   "period": "2026-10-04..2026-10-10"
+  },
+  {
+   "conv_pct": 7.1,
+   "converted": 2,
+   "deduped": 36,
+   "existing": 8,
+   "forms": 39,
+   "net": 28,
+   "period": "2026-10-11..2026-10-17"
+  },
+  {
+   "conv_pct": 2.7,
+   "converted": 1,
+   "deduped": 48,
+   "existing": 11,
+   "forms": 48,
+   "net": 37,
+   "period": "2026-10-18..2026-10-24"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 35,
+   "existing": 7,
+   "forms": 36,
+   "net": 28,
+   "period": "2026-10-25..2026-10-31"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 54,
+   "existing": 14,
+   "forms": 55,
+   "net": 40,
+   "period": "2026-11-01..2026-11-07"
+  },
+  {
+   "conv_pct": 0.0,
+   "converted": 0,
+   "deduped": 17,
+   "existing": 3,
+   "forms": 17,
+   "net": 14,
+   "period": "2026-11-08..2026-11-14"
+  }
+ ]
+}

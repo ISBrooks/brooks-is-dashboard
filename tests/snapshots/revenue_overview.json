@@ -1,0 +1,380 @@
+{
+ "agents": [
+  {
+   "agent": "Avery Stone",
+   "best_month": {
+    "amount": 34105.02,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 112727.16,
+    "label": "2026"
+   },
+   "total": 280441.0,
+   "years": [
+    0.0,
+    80263.95,
+    87449.89,
+    112727.16
+   ]
+  },
+  {
+   "agent": "Devon Marsh",
+   "best_month": {
+    "amount": 53171.22,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 122221.56,
+    "label": "2026"
+   },
+   "total": 278283.23,
+   "years": [
+    0.0,
+    82657.12,
+    73404.55,
+    122221.56
+   ]
+  },
+  {
+   "agent": "Finley Shaw",
+   "best_month": {
+    "amount": 49515.18,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 133384.03,
+    "label": "2026"
+   },
+   "total": 260140.59,
+   "years": [
+    0.0,
+    55965.55,
+    70791.01,
+    133384.03
+   ]
+  },
+  {
+   "agent": "Blake Rivers",
+   "best_month": {
+    "amount": 34684.34,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 123076.21,
+    "label": "2026"
+   },
+   "total": 258317.51,
+   "years": [
+    0.0,
+    64968.59,
+    70272.71,
+    123076.21
+   ]
+  },
+  {
+   "agent": "Robin Vale",
+   "best_month": {
+    "amount": 16980.58,
+    "label": "Sep 2026"
+   },
+   "best_year": {
+    "amount": 57969.93,
+    "label": "2026"
+   },
+   "total": 139477.6,
+   "years": [
+    0.0,
+    36384.1,
+    45123.57,
+    57969.93
+   ]
+  },
+  {
+   "agent": "Casey Flint",
+   "best_month": {
+    "amount": 21013.9,
+    "label": "Sep 2026"
+   },
+   "best_year": {
+    "amount": 64896.01,
+    "label": "2026"
+   },
+   "total": 136338.56,
+   "years": [
+    0.0,
+    30373.54,
+    41069.01,
+    64896.01
+   ]
+  },
+  {
+   "agent": "Emery Lake",
+   "best_month": {
+    "amount": 23786.26,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 63784.97,
+    "label": "2026"
+   },
+   "total": 131588.68,
+   "years": [
+    0.0,
+    36830.17,
+    30973.54,
+    63784.97
+   ]
+  },
+  {
+   "agent": "Harper Quinn",
+   "best_month": {
+    "amount": 17187.25,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 60075.23,
+    "label": "2026"
+   },
+   "total": 122515.08,
+   "years": [
+    0.0,
+    30952.26,
+    31487.59,
+    60075.23
+   ]
+  },
+  {
+   "agent": "Office Staff B",
+   "best_month": {
+    "amount": 12515.87,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 35017.49,
+    "label": "2026"
+   },
+   "total": 76801.06,
+   "years": [
+    0.0,
+    26456.47,
+    15327.1,
+    35017.49
+   ]
+  },
+  {
+   "agent": "Office Staff C",
+   "best_month": {
+    "amount": 10677.11,
+    "label": "Sep 2026"
+   },
+   "best_year": {
+    "amount": 35615.29,
+    "label": "2026"
+   },
+   "total": 70289.41,
+   "years": [
+    0.0,
+    17450.15,
+    17223.97,
+    35615.29
+   ]
+  },
+  {
+   "agent": "Former Rep Two",
+   "best_month": {
+    "amount": 5800.01,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 31774.44,
+    "label": "2026"
+   },
+   "total": 63154.55,
+   "years": [
+    0.0,
+    11558.13,
+    19821.98,
+    31774.44
+   ]
+  },
+  {
+   "agent": "Office Staff A",
+   "best_month": {
+    "amount": 8870.5,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 25269.15,
+    "label": "2026"
+   },
+   "total": 60739.31,
+   "years": [
+    0.0,
+    22658.06,
+    12812.1,
+    25269.15
+   ]
+  },
+  {
+   "agent": "Former Rep One",
+   "best_month": {
+    "amount": 5916.75,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 10295.45,
+    "label": "2025"
+   },
+   "total": 27532.4,
+   "years": [
+    0.0,
+    7329.5,
+    10295.45,
+    9907.45
+   ]
+  }
+ ],
+ "by": "agent",
+ "chart": {
+  "agents": [
+   {
+    "agent": "2023",
+    "months": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "total": 0.0
+   },
+   {
+    "agent": "2024",
+    "months": [
+     27260.91,
+     34334.91,
+     39778.49,
+     42136.59,
+     50657.84,
+     50706.95,
+     39684.68,
+     43920.06,
+     34949.66,
+     43805.1,
+     42351.9,
+     54260.5
+    ],
+    "total": 503847.59
+   },
+   {
+    "agent": "2025",
+    "months": [
+     34438.05,
+     39049.37,
+     59612.91,
+     44278.76,
+     31016.14,
+     42545.81,
+     37735.26,
+     41490.85,
+     35956.16,
+     49889.75,
+     51306.2,
+     58733.21
+    ],
+    "total": 526052.47
+   },
+   {
+    "agent": "2026",
+    "months": [
+     47442.65,
+     29142.19,
+     41114.36,
+     37075.0,
+     47224.25,
+     44027.98,
+     42059.26,
+     29376.42,
+     198656.47,
+     285517.69,
+     74082.65
+    ],
+    "total": 875718.92
+   }
+  ],
+  "months": [
+   "Jan",
+   "Feb",
+   "Mar",
+   "Apr",
+   "May",
+   "Jun",
+   "Jul",
+   "Aug",
+   "Sep",
+   "Oct",
+   "Nov",
+   "Dec"
+  ],
+  "year": ""
+ },
+ "hall_of_fame": {
+  "day": {
+   "agent": "Devon Marsh",
+   "amount": 6993.22,
+   "label": "2026-09-27"
+  },
+  "month": {
+   "agent": "Devon Marsh",
+   "amount": 53171.22,
+   "label": "Oct 2026"
+  },
+  "week": {
+   "agent": "Finley Shaw",
+   "amount": 15662.48,
+   "label": "Sep 27 – Oct 3, 2026"
+  }
+ },
+ "mode": "overview",
+ "seller_count": 13,
+ "team_best_year": {
+  "amount": 875718.92,
+  "label": "2026"
+ },
+ "team_records": {
+  "day": {
+   "amount": 17394.83,
+   "label": "2026-10-03"
+  },
+  "month": {
+   "amount": 285517.69,
+   "label": "Oct 2026"
+  },
+  "week": {
+   "amount": 74855.46,
+   "label": "Sep 13 – Sep 19, 2026"
+  }
+ },
+ "team_total": 1905618.98,
+ "year": null,
+ "year_totals": [
+  0.0,
+  503847.59,
+  526052.47,
+  875718.92
+ ],
+ "years": [
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}

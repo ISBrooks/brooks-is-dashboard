@@ -1,0 +1,82 @@
+{
+ "days": 30,
+ "rows": [
+  {
+   "agent": "Robin Vale",
+   "call_date": "2026-10-29",
+   "kind": "other",
+   "phone": "+15552003451",
+   "sold_by": "Field Tech 2",
+   "sub_added": "2026-11-08",
+   "wrapup": "Other"
+  },
+  {
+   "agent": "Robin Vale",
+   "call_date": "2026-10-26",
+   "kind": "unqualified",
+   "phone": "+15552015666",
+   "sold_by": "Office Staff B",
+   "sub_added": "2026-10-29",
+   "wrapup": "Unqualified"
+  },
+  {
+   "agent": "Avery Stone",
+   "call_date": "2026-10-22",
+   "kind": "unqualified",
+   "phone": "+15552015666",
+   "sold_by": "Office Staff B",
+   "sub_added": "2026-10-29",
+   "wrapup": "Unqualified"
+  }
+ ],
+ "summary": [
+  {
+   "agent": "Avery Stone",
+   "cc_leaked": 0,
+   "hidden": 0,
+   "leaked": 1
+  },
+  {
+   "agent": "Robin Vale",
+   "cc_leaked": 1,
+   "hidden": 0,
+   "leaked": 1
+  },
+  {
+   "agent": "Finley Shaw",
+   "cc_leaked": 0,
+   "hidden": 0,
+   "leaked": 0
+  },
+  {
+   "agent": "Blake Rivers",
+   "cc_leaked": 0,
+   "hidden": 0,
+   "leaked": 0
+  },
+  {
+   "agent": "Casey Flint",
+   "cc_leaked": 0,
+   "hidden": 0,
+   "leaked": 0
+  },
+  {
+   "agent": "Emery Lake",
+   "cc_leaked": 0,
+   "hidden": 0,
+   "leaked": 0
+  },
+  {
+   "agent": "Harper Quinn",
+   "cc_leaked": 0,
+   "hidden": 0,
+   "leaked": 0
+  },
+  {
+   "agent": "Devon Marsh",
+   "cc_leaked": 0,
+   "hidden": 0,
+   "leaked": 0
+  }
+ ]
+}

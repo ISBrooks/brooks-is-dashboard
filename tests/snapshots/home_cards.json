@@ -1,0 +1,210 @@
+{
+ "all30": {
+  "conv": 435,
+  "form_conv": 3,
+  "form_net": 139,
+  "pct": 21.7,
+  "prev_range": {
+   "end": "2026-10-08",
+   "start": "2026-09-09"
+  },
+  "range": {
+   "end": "2026-11-07",
+   "start": "2026-10-09"
+  },
+  "sheet_q": 1862,
+  "sheet_s": 432,
+  "total": 2001
+ },
+ "all7": {
+  "conv": 89,
+  "form_conv": 0,
+  "form_net": 39,
+  "pct": 20.0,
+  "prev_range": {
+   "end": "2026-10-31",
+   "start": "2026-10-25"
+  },
+  "range": {
+   "end": "2026-11-07",
+   "start": "2026-11-01"
+  },
+  "sheet_q": 407,
+  "sheet_s": 89,
+  "total": 446
+ },
+ "anchor_end": "2026-11-09",
+ "form30": {
+  "conv": 3,
+  "net": 141,
+  "pct": 2.1,
+  "prev_pct": 2.1,
+  "prev_range": {
+   "end": "2026-10-10",
+   "start": "2026-09-11"
+  },
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-10-11"
+  }
+ },
+ "form7": {
+  "conv": 0,
+  "net": 34,
+  "pct": 0.0,
+  "prev_pct": 0.0,
+  "prev_range": {
+   "end": "2026-11-02",
+   "start": "2026-10-27"
+  },
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-11-03"
+  }
+ },
+ "generated_at": "2026-11-10T20:00:00+00:00",
+ "phone30": {
+  "conv": 104,
+  "pct": 51.0,
+  "prev_pct": 52.0,
+  "prev_range": {
+   "end": "2026-10-10",
+   "start": "2026-09-11"
+  },
+  "qual": 204,
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-10-11"
+  }
+ },
+ "phone7": {
+  "conv": 8,
+  "pct": 29.6,
+  "prev_pct": 53.7,
+  "prev_range": {
+   "end": "2026-11-02",
+   "start": "2026-10-27"
+  },
+  "qual": 27,
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-11-03"
+  }
+ },
+ "sheet30": {
+  "pct": 23.2,
+  "prev_pct": 26.8,
+  "prev_range": {
+   "end": "2026-10-08",
+   "start": "2026-09-09"
+  },
+  "qual": 1862,
+  "range": {
+   "end": "2026-11-07",
+   "start": "2026-10-09"
+  },
+  "sales": 432
+ },
+ "sheet7": {
+  "pct": 21.9,
+  "prev_pct": 19.4,
+  "prev_range": {
+   "end": "2026-10-31",
+   "start": "2026-10-25"
+  },
+  "qual": 407,
+  "range": {
+   "end": "2026-11-07",
+   "start": "2026-11-01"
+  },
+  "sales": 89
+ },
+ "sts30": {
+  "failed": 52,
+  "no_appt": 31,
+  "pending": 15,
+  "prev_pct": 81.9,
+  "prev_range": {
+   "end": "2026-10-10",
+   "start": "2026-09-11"
+  },
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-10-11"
+  },
+  "serviced": 242,
+  "sold": 340,
+  "sts_pct": 82.3
+ },
+ "sts7": {
+  "failed": 8,
+  "no_appt": 8,
+  "pending": 7,
+  "prev_pct": 83.6,
+  "prev_range": {
+   "end": "2026-11-02",
+   "start": "2026-10-27"
+  },
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-11-03"
+  },
+  "serviced": 47,
+  "sold": 70,
+  "sts_pct": 85.5
+ },
+ "team30": {
+  "acv": 1025.55,
+  "init_avg": 177.43,
+  "multiyear_pct": 51.1,
+  "prev_acv": 1026.37,
+  "prev_init_avg": 173.05,
+  "prev_multiyear_pct": 42.9,
+  "prev_range": {
+   "end": "2026-10-10",
+   "start": "2026-09-11"
+  },
+  "prev_signed_pct": 59.3,
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-10-11"
+  },
+  "signed_pct": 68.7,
+  "subs": 221
+ },
+ "team7": {
+  "acv": 1014.46,
+  "init_avg": 175.9,
+  "multiyear_pct": 53.5,
+  "prev_acv": 1050.21,
+  "prev_init_avg": 171.02,
+  "prev_multiyear_pct": 44.6,
+  "prev_range": {
+   "end": "2026-11-02",
+   "start": "2026-10-27"
+  },
+  "prev_signed_pct": 59.1,
+  "range": {
+   "end": "2026-11-09",
+   "start": "2026-11-03"
+  },
+  "signed_pct": 72.2,
+  "subs": 43
+ },
+ "true30": {
+  "audit_qual": 1862,
+  "hidden": 0,
+  "leaked": 1,
+  "pct": 5.9,
+  "prev_pct": 6.6,
+  "sys_conv": 110
+ },
+ "true7": {
+  "audit_qual": 407,
+  "hidden": 0,
+  "leaked": 0,
+  "pct": 3.7,
+  "prev_pct": 7.2,
+  "sys_conv": 15
+ }
+}

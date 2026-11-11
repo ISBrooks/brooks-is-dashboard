@@ -214,7 +214,7 @@ def _lookup(key) -> tuple[_Entry | None, str | None]:
     return None, why
 
 
-def _get(key, label, compute, copy_result, ttl):
+def _get(key, label, compute, copy_result, ttl, keep=None):
     e, why = _lookup(key)
     if e is None:
         with _entries_lock:
@@ -222,7 +222,7 @@ def _get(key, label, compute, copy_result, ttl):
         with lock:                      # one calculation per key at a time; others wait for it
             e, why2 = _lookup(key)
             if e is None:
-                e, value = _build(key, label, compute, ttl, why2 or why)
+                e, value = _build(key, label, compute, ttl, why2 or why, keep)
                 if e is None:           # computed but not saved (first run on a new table):
                     return value        # a private object, no copy needed
             else:
@@ -233,7 +233,7 @@ def _get(key, label, compute, copy_result, ttl):
     return copy.deepcopy(e.value) if copy_result else e.value
 
 
-def _build(key, label, compute, ttl, why) -> tuple[_Entry | None, object]:
+def _build(key, label, compute, ttl, why, keep=None) -> tuple[_Entry | None, object]:
     before = _versions()                # BEFORE reading, so a write mid-way makes the result stale
     rec = _Recorder()
     token = _recorders.set(_recorders.get() + (rec,))
@@ -243,6 +243,9 @@ def _build(key, label, compute, ttl, why) -> tuple[_Entry | None, object]:
     finally:
         _recorders.reset(token)
     ms = (time.perf_counter() - t0) * 1000
+    if keep is not None and not keep(value):
+        _stats["uncached"] += 1          # e.g. an error answer from an outside service
+        return None, value
     tables = {t for t in rec.tables if not t.startswith(_IGNORE_TABLES) and t not in _not_tables}
     # everything this calculation read is also read by whatever called it
     for outer in _recorders.get():
@@ -281,13 +284,15 @@ def _build(key, label, compute, ttl, why) -> tuple[_Entry | None, object]:
     return e, value
 
 
-def cached(*, copy_result: bool = True, ttl=None):
+def cached(*, copy_result: bool = True, ttl=None, keep=None):
     """Save a function's result until what it read changes (see module docs).
 
     copy_result=False hands every caller the SAME object - only for results no
     caller modifies (big payloads where a copy per request would cost too much).
     ttl: seconds, or a function of the call's arguments returning seconds/None,
-    for results that also drift with the clock (a rolling "last 30 days")."""
+    for results that also drift with the clock (a rolling "last 30 days").
+    keep: a function of the result; return False to hand it back WITHOUT saving
+    it (so an error from an outside service is retried, not remembered)."""
     def deco(fn):
         sig = inspect.signature(fn)
         label = fn.__name__
@@ -306,7 +311,7 @@ def cached(*, copy_result: bool = True, ttl=None):
                 return fn(*args, **kwargs)
             t = ttl(dict(params)) if callable(ttl) else ttl
             shown = label + ("(" + ", ".join(f"{k}={v}" for k, v in params) + ")" if params else "")
-            return _get(key, shown, lambda: fn(*args, **kwargs), copy_result, t)
+            return _get(key, shown, lambda: fn(*args, **kwargs), copy_result, t, keep)
 
         wrapper.uncached = fn
         return wrapper
