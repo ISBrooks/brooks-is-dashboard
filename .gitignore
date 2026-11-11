@@ -1,0 +1,30 @@
+# --- secrets: never in git ---
+.env
+.env.*
+secrets/
+*.pem
+*.key
+
+# --- data: the database and anything exported from it ---
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+# one-off outputs that hold customer / commission detail
+exports/
+previews/
+reports/
+
+# --- leftovers from the old copy-a-backup-before-patching routine ---
+*.bak
+*.bak[0-9]*
+*.bak_*
+*.bak.*
+
+# --- machine-local ---
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.claude/settings.local.json

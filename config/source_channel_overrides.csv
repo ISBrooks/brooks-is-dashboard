@@ -1,0 +1,41 @@
+name,channel
+# Dashboard-owned channel corrections — layered ON TOP of the generated
+# source_channels.csv (rebuilt from the IS Sourcing master sheet). Rows here win.
+# "name" is a PestRoutes source label, a provider, or a source group, matched
+# case-insensitively. A trailing * matches every name starting with that text.
+# "channel" is Paid, Organic, Affiliate Marketing or Generic. Anything no file
+# names lands in "Other".
+#
+# --- not on the sourcing sheet with a channel (Dallin, 2026-10-05) ---
+ChatGPT Ads,Paid
+#
+# --- Generic = process-style sources, not a marketing channel ---
+(no source),Generic
+Generic,Generic
+Upsell,Generic
+Mosquito upsell Campaign,Generic
+Additional Property,Generic
+SNS Campaign,Generic
+Technician Referral,Generic
+Customer Referral,Generic
+Customer Service Referral,Generic
+Refer a Friend Campaign,Generic
+Reactivation Email Campaign,Generic
+Email Campaign,Generic
+Outbound,Generic
+Door to Door,Generic
+Saw our truck,Generic
+6 Brothers*,Generic
+Bad Debt*,Generic
+Inside Sales Renewal,Generic
+Zoldz - Renewal,Generic
+#
+# --- old-style labels that name the provider directly ---
+Eforce Web*,Paid
+Google Paid*,Paid
+Service Direct*,Affiliate Marketing
+Oregon Organic,Organic
+California Organic,Organic
+Social Media Groups,Organic
+Go Local,Organic
+Live Force,Organic

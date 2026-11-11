@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "isdash",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "scripts/serve.py"
+      ],
+      "port": 8377
+    },
+    {
+      "name": "reports",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8399", "--bind", "127.0.0.1", "--directory", "reports"],
+      "port": 8399
+    }
+  ]
+}

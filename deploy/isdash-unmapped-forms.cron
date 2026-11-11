@@ -1,0 +1,6 @@
+# IS Dashboard: daily READ-ONLY count of form leads the sourcing app could not map.
+# Installed as /etc/cron.d/isdash-unmapped-forms. 6:25 AM PT (droplet TZ), after the
+# sourcing nightly run. Script lives in the dashboard repo; it uses the sourcing app's
+# venv + Gmail token exactly like the app's own watchers, and writes only
+# /home/isdash/brooks-is-dash/data/unmapped_forms.json (read by the Software Management tab).
+25 6 * * *  root  /opt/lead-attribution/.venv/bin/python /home/isdash/brooks-is-dash/scripts/unmapped_forms_watch.py >> /home/isdash/brooks-is-dash/data/unmapped_forms.log 2>&1

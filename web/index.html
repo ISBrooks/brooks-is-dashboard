@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Brooks IS Dashboard</title>
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="brand/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#1e3659">
+<link rel="stylesheet" href="style.css?v=109">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img class="brand-mark" src="brand/mark-sky.png" alt="Brooks Pest Control" width="46" height="46">
+    <div class="brand-text">
+      <h1><span class="brand-name">Brooks</span><span class="brand-app">IS Dashboard</span></h1>
+      <div id="coverage" class="coverage"></div>
+    </div>
+  </div>
+  <div class="sync-box" style="display:none">
+    <button id="sync-btn" title="Re-import the audit sheet, pull new form leads, catch up Genesys calls and FieldRoutes subscriptions, re-check pending statuses, and refresh the customer base — in the right order. Runs automatically every morning; available to managers once per hour (admins unlimited).">⟳ Sync</button>
+    <span id="sync-status" class="sync-status"></span>
+  </div>
+  <button id="nav-toggle" class="nav-toggle" aria-label="Menu" aria-expanded="false">☰</button>
+  <nav id="tabs">
+    <button data-tab="home" class="active">Home</button>
+    <button data-tab="revenue">Revenue</button>
+    <button data-tab="agent">Agent Metrics</button>
+    <button data-tab="metrics">Team Metrics</button>
+    <button data-tab="managers" id="tab-managers" style="display:none">Schedule</button>
+    <button data-tab="payroll" id="tab-payroll" style="display:none">Payroll</button>
+    <button data-tab="sources" id="tab-sources" style="display:none">Marketing</button>
+    <button id="mktg-unlock" class="mktg-btn" title="Unlock the marketing source view">Marketing</button>
+    <button data-tab="settings" class="mktg-btn" title="Manage agents, teams, and flags">⚙ Settings</button>
+  </nav>
+</header>
+
+<main>
+  <div id="no-access" class="panel" style="display:none"></div>
+
+  <!-- the agent page: the only thing an agent login ever sees -->
+  <section id="panel-me" class="panel">
+    <div id="me-banner"></div>
+    <nav class="subtabs" id="me-subtabs">
+      <button data-mesub="numbers" class="active">My Numbers</button>
+      <button data-mesub="schedule">Schedule</button>
+      <button data-mesub="renewal">Renewal Calculator</button>
+      <button data-mesub="payroll">Payroll</button>
+    </nav>
+
+    <div id="mesub-schedule" class="mesubpanel">
+      <div class="me-top">
+        <div id="me-clock" class="clock-card"></div>
+        <div id="me-pto" class="pto-card"></div>
+        <div id="me-timeoff" class="timeoff-box"></div>
+      </div>
+      <div class="panel-head">
+        <h2><span id="me-sched-title">My Schedule</span> <span class="sub">last week, this week and what's posted after that</span></h2>
+      </div>
+      <div id="me-sched"></div>
+    </div>
+
+    <div id="mesub-renewal" class="mesubpanel">
+      <div id="rc-rules" class="rc-rules"></div>
+      <div class="panel-head">
+        <h2>Renewal Calculator</h2>
+        <span id="rc-stale"></span>
+      </div>
+      <div id="rc-calc" class="rc-calc"></div>
+      <div class="rc-tables">
+        <div>
+          <h3 class="section-title">Minimum Pricing <span class="sub">monthly price by frequency</span></h3>
+          <div id="rc-min" class="table-wrap"></div>
+        </div>
+        <div>
+          <h3 class="section-title">Recommended Start Prices <span class="sub">monthly price by frequency</span></h3>
+          <div id="rc-start" class="table-wrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="mesub-payroll" class="mesubpanel">
+      <div class="panel-head">
+        <h2>My Commission Report <span class="sub" id="mp-sub"></span></h2>
+        <div class="controls">
+          <select id="mp-period"></select>
+          <a id="mp-dl" class="year-btn" href="#">Download CSV</a>
+        </div>
+      </div>
+      <div id="mp-tiles" class="home-counters me-counters"></div>
+      <div class="panel-head" style="margin-top:30px">
+        <h2>Commission Lookup <span class="sub">your accounts only</span></h2>
+        <div class="controls">
+          <input id="mp-q" class="set-search" type="search" autocomplete="off"
+                 placeholder="&#128269; Account #, subscription #, or customer name&hellip;">
+          <button id="mp-go" class="year-btn">Look up</button>
+        </div>
+      </div>
+      <div id="mp-results"></div>
+    </div>
+
+    <div id="mesub-numbers" class="mesubpanel active">
+    <div id="me-updated" class="me-updated"></div>
+    <div id="me-counters" class="home-counters me-counters"></div>
+    <div class="panel-head">
+      <h2><span id="me-title">My Numbers</span> <span class="sub">you vs the team · excludes all upsells &amp; mosquito upsells</span></h2>
+      <div class="controls">
+        <span id="me-mode" class="mode-toggle"></span>
+        <span id="me-picker" class="controls"></span>
+      </div>
+    </div>
+    <div id="me-sc-table"></div>
+    <div id="me-sc-tiers"></div>
+
+    <div class="panel-head" style="margin-top:30px">
+      <h2>Power Score <span class="sub" id="me-ps-sub"></span></h2>
+      <div class="controls"><span id="me-ps-period" class="mode-toggle"></span></div>
+    </div>
+    <div id="me-ps-table"></div>
+    <div id="me-ps-scales"></div>
+    </div>
+  </section>
+  <section id="panel-home" class="panel active">
+    <div class="panel-head"><h2 id="home-title">At a glance</h2>
+      <div id="home-counters" class="home-counters"></div></div>
+    <div id="home-metrics" class="home-metrics"></div>
+    <div class="panel-head home-ytd-head">
+      <h2>Year to Date by Agent <span class="sub">Jan 1 – today · sold between</span></h2>
+    </div>
+    <div id="home-ytd"></div>
+  </section>
+
+  <section id="panel-revenue" class="panel">
+    <div class="panel-head">
+      <h2>Revenue <span class="sub">total contract value sold · by agent</span></h2>
+      <div class="controls"><span id="rev-years" class="year-picker"></span></div>
+    </div>
+    <div id="rev-records" class="rev-records"></div>
+    <div id="rev-chart-box" class="rev-chart-box"></div>
+    <h3 class="section-title">By Agent &amp; Month <span class="sub">revenue sold each month</span></h3>
+    <div id="rev-table"></div>
+  </section>
+
+  <section id="panel-metrics" class="panel">
+    <nav class="subtabs" id="metrics-subtabs">
+      <button data-msub="team" class="active">Team Overview</button>
+      <button data-msub="phone">Inbound Phone Conversion</button>
+      <button data-msub="forms">Form Conversion</button>
+      <button data-msub="multiyear">Multiyear</button>
+      <button data-msub="acv">Contract Value</button>
+    </nav>
+
+    <div id="msub-team" class="msubpanel active">
+      <div class="panel-head">
+        <h2>Any dates <span class="sub">whole team, Josh's team and Kai's team for the dates you pick</span></h2>
+        <div class="controls">
+          <span id="tm-mode" class="mode-toggle"></span>
+          <span id="tm-picker" class="controls"></span>
+        </div>
+      </div>
+      <div id="tm-table"></div>
+      <div class="panel-head" style="margin-top:22px">
+        <h2>Team Overview <span class="sub">Josh's team vs Kai's team · last 30 and 7 complete days · 13-week trend · sold between</span></h2>
+      </div>
+      <div id="to-cards" class="home-metrics"></div>
+    </div>
+
+    <div id="msub-phone" class="msubpanel">
+    <nav class="subtabs nested" id="phone-subtabs">
+      <button data-sub="conv" class="active">Conversion</button>
+      <button data-sub="trends">Trends</button>
+      <button data-sub="audit">Audit</button>
+      <button data-sub="leaked">Leaked Leads</button>
+    </nav>
+    <div class="legend" id="phone-legend"></div>
+
+    <div id="sub-conv" class="subpanel active">
+      <div class="panel-head">
+        <h2>Conversion <span class="sub">by agent</span></h2>
+        <div class="controls" id="ph-picker"></div>
+      </div>
+      <div id="ph-custom-table"></div>
+    </div>
+
+    <div id="sub-trends" class="subpanel">
+      <div class="panel-head">
+        <h2>Trends</h2>
+        <div class="controls">
+          <select id="tr-metric"></select>
+          <select id="tr-gran">
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
+      <div class="trend-layout">
+        <div id="tr-agents" class="agent-picker"></div>
+        <div id="tr-chart" class="chart-box"></div>
+      </div>
+    </div>
+
+    <div id="sub-audit" class="subpanel">
+      <div class="panel-head">
+        <h2>Audit vs System <span class="sub">(human-audited sheet vs Genesys dispositions)</span></h2>
+        <div class="controls" id="au-picker"></div>
+      </div>
+      <div id="audit-body"></div>
+    </div>
+
+    <div id="sub-leaked" class="subpanel">
+      <div class="panel-head">
+        <h2>Leaked Leads <span class="sub">callers not pitched who bought from someone else within 14 days</span></h2>
+        <div class="controls" id="lk-picker"></div>
+      </div>
+      <div id="lk-summary"></div>
+      <h3 class="section-title">Detail <span class="sub">(most recent first)</span></h3>
+      <div id="lk-detail"></div>
+    </div>
+    </div><!-- /msub-phone -->
+
+    <div id="msub-multiyear" class="msubpanel">
+      <div class="panel-head">
+        <h2>Multiyear <span class="sub">contract duration of subscriptions sold (soldBy)</span></h2>
+        <div class="controls" id="my-picker"></div>
+      </div>
+      <div class="legend" id="my-legend"></div>
+      <div id="my-table"></div>
+    </div>
+
+    <div id="msub-acv" class="msubpanel">
+      <div class="panel-head">
+        <h2>Contract Value <span class="sub">average contract value of subscriptions sold (soldBy)</span></h2>
+        <div class="controls" id="cv-picker"></div>
+      </div>
+      <div class="legend" id="cv-legend"></div>
+      <div id="cv-table"></div>
+    </div>
+
+    <div id="msub-forms" class="msubpanel">
+      <div class="panel-head">
+        <h2>Form Conversion <span class="sub">team conversion — from the sourcing app's normalized form feed, verified against FieldRoutes</span></h2>
+        <div class="controls" id="fl-picker"></div>
+        <span id="fl-note" class="sub"></span>
+      </div>
+      <div id="fl-table"></div>
+    </div>
+  </section>
+
+  <section id="panel-agent" class="panel">
+    <nav class="subtabs" id="agent-subtabs">
+      <button data-asub="scorecard" class="active">IS #'s</button>
+      <button data-asub="power">Power Score</button>
+      <button data-asub="compare">Compare Agents</button>
+      <button data-asub="master">Master Metric</button>
+      <button data-asub="inbound">Inbound vs Other</button>
+    </nav>
+
+    <div id="asub-inbound" class="asubpanel">
+      <div class="panel-head">
+        <h2>Inbound vs Other <span class="sub">revenue from each agent's own inbound calls vs everything else</span></h2>
+        <div class="controls"><span id="ib-picker" class="controls"></span></div>
+      </div>
+      <div id="ib-notes"></div>
+      <div id="ib-table"></div>
+      <div id="ib-foot"></div>
+    </div>
+
+    <div id="asub-power" class="asubpanel">
+      <div class="panel-head">
+        <h2>Power Score <span class="sub">weighted rank for lead distribution</span></h2>
+        <div class="controls">
+          <span id="ps-mode" class="mode-toggle"></span>
+          <span id="ps-picker" class="controls"></span>
+        </div>
+      </div>
+      <div id="ps-table"></div>
+      <div id="ps-scales"></div>
+    </div>
+
+    <div id="asub-scorecard" class="asubpanel active">
+      <div class="panel-head">
+        <h2>IS #'s <span class="sub">excludes all upsells &amp; mosquito upsells</span></h2>
+        <div class="controls">
+          <span id="sc-mode" class="mode-toggle"></span>
+          <span id="sc-picker" class="controls"></span>
+          <details id="sc-agents" class="src-picker"><summary>Agents</summary>
+            <div id="sc-agents-body" class="src-picker-body"></div></details>
+          <details id="sc-cols" class="src-picker"><summary>Metrics</summary>
+            <div id="sc-cols-body" class="src-picker-body"></div></details>
+        </div>
+      </div>
+      <div id="sc-table"></div>
+      <div id="sc-tiers"></div>
+    </div>
+
+    <div id="asub-master" class="asubpanel">
+      <div class="panel-head">
+        <h2>Master Metric <span class="sub">productivity &amp; availability — are agents making good use of their time</span></h2>
+        <div class="controls"><span id="mm-picker" class="controls"></span></div>
+      </div>
+      <div id="mm-notes"></div>
+      <div id="mm-table"></div>
+      <div id="mm-foot"></div>
+    </div>
+
+    <div id="asub-compare" class="asubpanel">
+      <div class="panel-head">
+        <h2>Compare <span class="sub">up to three agents vs the team</span></h2>
+        <div class="controls">
+          <select id="av-a1"></select>
+          <select id="av-a2"></select>
+          <select id="av-a3"></select>
+          <span id="av-picker" class="controls"></span>
+        </div>
+      </div>
+      <div class="legend" id="av-legend"></div>
+      <div id="av-table"></div>
+    </div>
+  </section>
+
+  <section id="panel-sources" class="panel">
+    <nav class="subtabs" id="mktg-subtabs">
+      <button data-mksub="spend" class="active">Spend &amp; ROAS</button>
+      <button data-mksub="sources">Sales Data</button>
+      <button data-mksub="volume">Lead Volume</button>
+      <button data-mksub="bysource">Volume By Source</button>
+    </nav>
+
+    <div id="mksub-volume" class="mksubpanel">
+      <div class="panel-head">
+        <h2>Lead Volume <span class="sub">year over year · the same week of each year · 52 Sun–Sat weeks</span></h2>
+      </div>
+      <h3 class="section-title">Call volume <span class="sub">calls offered to the Inside Sales queues, per week</span></h3>
+      <div id="mvh-chart" class="rev-chart-box"></div>
+      <h3 class="section-title">Form counts <span class="sub">form leads per week</span></h3>
+      <div id="mfh-chart" class="rev-chart-box"></div>
+      <div id="mvh-foot"></div>
+      <div class="panel-head" style="margin-top:26px">
+        <h3 class="section-title" style="margin:0">Leads by hour <span class="sub" id="mhr-sub">Mountain time · average per day for each hour</span></h3>
+        <div class="controls"><span id="mhr-picker" class="controls"></span></div>
+      </div>
+      <div id="mhr-cards" class="rev-cards"></div>
+      <div id="mhr-chart" class="rev-chart-box"></div>
+      <div id="mhr-table"></div>
+    </div>
+
+    <div id="mksub-bysource" class="mksubpanel">
+      <div class="panel-head">
+        <h2>Volume By Source <span class="sub">calls and form leads per lead source, with the trend</span></h2>
+        <div class="controls"><select id="mb-source"></select><span id="mb-picker" class="controls"></span></div>
+      </div>
+      <h3 class="section-title">Weekly trend <span class="sub">calls + forms per Sun–Sat week for the source picked above · last 26 complete weeks</span></h3>
+      <div id="mb-chart" class="rev-chart-box"></div>
+      <div class="panel-head" style="margin-top:22px">
+        <h3 class="section-title" style="margin:0">Sources in range <span class="sub">vs the same number of days before</span></h3>
+        <div class="controls">
+          <details id="mb-src" class="src-picker"><summary>Sources</summary>
+            <div id="mb-src-body" class="src-picker-body"></div></details>
+        </div>
+      </div>
+      <div id="mb-table"></div>
+      <div id="mb-foot"></div>
+    </div>
+
+    <div id="mksub-spend" class="mksubpanel active">
+      <div class="panel-head">
+        <h2>Spend &amp; ROAS <span class="sub">by source · last week, trailing 4 weeks, trailing 12 weeks</span></h2>
+        <div class="controls">
+          <details id="ms-src" class="src-picker"><summary>Sources</summary>
+            <div id="ms-src-body" class="src-picker-body"></div></details>
+          <details id="ms-cols" class="src-picker"><summary>Columns</summary>
+            <div id="ms-cols-body" class="src-picker-body"></div></details>
+        </div>
+      </div>
+      <div id="ms-table"></div>
+      <div id="ms-foot"></div>
+      <div class="panel-head" style="margin-top:24px">
+        <h2>Weekly trend <span class="sub" id="ms-chart-sub">this year · spend and revenue on the left, CPA % on the right</span></h2>
+        <div class="controls">
+          <span id="ms-chart-range" class="controls"></span>
+          <details id="ms-chart-pick" class="src-picker"><summary>Chart: everything</summary>
+            <div id="ms-chart-pick-body" class="src-picker-body"></div></details>
+        </div>
+      </div>
+      <div id="ms-chart" class="rev-chart-box"></div>
+      <div id="ms-ytd" class="mk-cards"></div>
+    </div>
+
+    <div id="mksub-sources" class="mksubpanel">
+    <div class="panel-head">
+      <h2>Sales Data <span class="sub">lead-provider economics by source</span></h2>
+      <div class="controls">
+        <span id="src-picker" class="controls"></span>
+        <span id="src-cats" class="cat-filters"></span>
+        <details id="src-list" class="src-picker">
+          <summary>Sources</summary>
+          <div id="src-picker-body" class="src-picker-body"></div>
+        </details>
+      </div>
+    </div>
+    <div id="src-table"></div>
+    <div class="panel-head" style="margin-top:28px">
+      <h2>Revenue by Source <span class="sub">total contract value sold · the Revenue tab's dollars, sliced by marketing channel or lead source</span></h2>
+      <div class="controls"><span id="srev-level" class="mode-toggle"></span><span id="srev-years" class="year-picker"></span></div>
+    </div>
+    <div id="srev-records" class="rev-records"></div>
+    <div id="srev-chart-box" class="rev-chart-box"></div>
+    <h3 class="section-title">By Month <span class="sub">revenue sold each month · ▶ opens a row to show what's inside it</span></h3>
+    <div id="srev-table"></div>
+    </div>
+  </section>
+
+  <section id="panel-managers" class="panel">
+    <nav class="subtabs" id="managers-subtabs">
+      <button data-gsub="schedule" class="active">Schedule</button>
+      <button data-gsub="templates">Templates</button>
+      <button data-gsub="timesheets">Timesheets</button>
+      <button data-gsub="reports">Hours report</button>
+      <button data-gsub="adherence">Adherence</button>
+      <button data-gsub="timeoff">Time off</button>
+      <button data-gsub="agents">Agents</button>
+    </nav>
+    <div id="gsub-timeoff" class="gsubpanel">
+      <div class="panel-head">
+        <h2>Time off <span class="sub">requests waiting on you, and who's out when</span></h2>
+        <div class="controls"><button class="year-btn active" id="to-add">+ Add time off</button></div>
+      </div>
+      <div id="to-pending"></div>
+      <h3 class="section-title">Approved <span class="sub">from two weeks ago onward</span></h3>
+      <div id="to-approved"></div>
+      <h3 class="section-title">Recently denied or cancelled</h3>
+      <div id="to-recent"></div>
+      <h3 class="section-title">Look up an agent <span class="sub">every request they've had, to change older ones</span></h3>
+      <div id="to-lookup"></div>
+    </div>
+    <div id="gsub-schedule" class="gsubpanel active">
+      <div class="panel-head">
+        <h2>Schedule <span class="sub" id="sb-sub">build the week, then publish it to the agents</span></h2>
+        <div class="controls" id="sb-controls"></div>
+      </div>
+      <div id="sb-actions" class="sb-actions"></div>
+      <div class="sb-layout">
+        <div id="sb-grid"></div>
+        <div id="sb-side">
+          <h3 class="section-title">Coverage <span class="sub">people on, per hour</span></h3>
+          <div id="sb-cover"></div>
+          <h3 class="section-title" style="margin-top:18px">On the clock now <span class="sub" id="lv-asof"></span></h3>
+          <div id="sb-live"></div>
+        </div>
+      </div>
+      <h3 class="section-title" style="margin-top:24px">Saturdays <span class="sub">longest since their last Saturday at the top</span></h3>
+      <div id="sb-sats"></div>
+      <h3 class="section-title" style="margin-top:24px">Coverage targets <span class="sub">what counts as yellow and green for each hour (red below yellow)</span></h3>
+      <div id="sb-targets"></div>
+    </div>
+    <div id="gsub-templates" class="gsubpanel">
+      <div class="panel-head">
+        <h2>Templates <span class="sub">reusable weeks to start a schedule from</span></h2>
+        <div class="controls" id="tp-controls"></div>
+      </div>
+      <div id="tp-new"></div>
+      <div id="tp-list"></div>
+      <div id="tp-editor"></div>
+    </div>
+    <div id="gsub-timesheets" class="gsubpanel">
+      <div class="panel-head">
+        <h2>Timesheets <span class="sub">scheduled vs clocked hours, per agent per day</span></h2>
+        <div class="controls">
+          <span id="ts-picker" class="controls"></span>
+          <a id="ts-csv" class="year-btn" href="#" title="Download this range as CSV">&#x2913; CSV</a>
+        </div>
+      </div>
+      <div id="ts-table"></div>
+      <div id="ts-detail"></div>
+      <h3 class="section-title" style="margin-top:24px">Clock rules <span class="sub">when the clock-in button is held back, auto clock-out, and one-day exceptions</span></h3>
+      <div id="ts-rules"></div>
+    </div>
+    <div id="gsub-reports" class="gsubpanel">
+      <div class="panel-head">
+        <h2>Hours report <span class="sub">regular, daily OT, weekly OT and PTO per agent, for payroll</span></h2>
+      </div>
+      <div id="hr-report"></div>
+    </div>
+    <div id="gsub-adherence" class="gsubpanel">
+      <div class="panel-head">
+        <h2>Adherence <span class="sub">how closely each agent's clock matches their posted shifts</span></h2>
+        <div class="controls"><span id="adh-picker" class="controls"></span></div>
+      </div>
+      <div id="adh-table"></div>
+      <div id="adh-detail"></div>
+    </div>
+    <div id="gsub-agents" class="gsubpanel">
+      <div class="panel-head">
+        <h2>Agents <span class="sub">start date, employment type, weekly hours, work state &mdash; what PTO accrual will run on</span></h2>
+      </div>
+      <div id="hr-table"></div>
+    </div>
+  </section>
+  <section id="panel-payroll" class="panel">
+    <nav class="subtabs" id="payroll-subtabs">
+      <button data-psub="lookup" class="active">Commission Lookup</button>
+      <button data-psub="adjust">Submit Adjustment</button>
+      <button data-psub="rules">Payroll Rules</button>
+      <button data-psub="roster">Commission Roster</button>
+      <button data-psub="downloads">Downloads</button>
+    </nav>
+
+    <div id="psub-adjust" class="psubpanel">
+      <div class="panel-head">
+        <h2>Submit Payroll Adjustment <span class="sub" id="aj-asof"></span></h2>
+      </div>
+      <div class="aj-grid">
+        <div class="dl-card">
+          <div class="aj-field"><label for="aj-type">Adjustment type</label>
+            <select id="aj-type">
+              <option value="split">Inside sales split — two ISA reps share one account</option>
+              <option value="outbound">Outbound split — inbound keeps rate minus 3%</option>
+              <option value="rescue">D2D rescue — ISA revives a door-to-door account (50%)</option>
+              <option value="upsell">Upsell — ISA raises an existing account's ACV (9%)</option>
+              <option value="tech_upsell">Technician referral upsell — tech refers, ISA sells</option>
+            </select></div>
+          <div class="aj-field"><label for="aj-acct">Account #</label>
+            <div class="aj-row">
+              <input id="aj-acct" inputmode="numeric" autocomplete="off"
+                     placeholder="PestRoutes account number">
+              <button id="aj-check" class="year-btn">Check</button>
+            </div></div>
+          <div id="aj-fields"></div>
+          <div class="aj-field"><label for="aj-sub">Subscription</label>
+            <select id="aj-sub"><option value="">auto (newest match)</option></select></div>
+          <div class="aj-field"><label for="aj-note">Note (optional)</label>
+            <input id="aj-note" autocomplete="off"
+                   placeholder="anything the payroll trail should know"></div>
+          <button id="aj-submit" class="year-btn aj-submit">Submit adjustment</button>
+          <div id="aj-result"></div>
+        </div>
+        <div class="dl-card">
+          <h3>Account check</h3>
+          <div id="aj-account" class="aj-account"><p class="sub">Enter an account
+          number and press Check — the customer and every subscription show here,
+          straight from the engine's synced PestRoutes data, so you confirm the
+          right account before submitting.</p></div>
+        </div>
+      </div>
+      <h3 class="section-title">Recent submissions
+        <span class="sub">verified &amp; booked by the engine — held rows retry on every run</span></h3>
+      <div id="aj-recent"></div>
+      <p class="home-note">Every submission is verified against the commission engine's
+      PestRoutes data before anything books: clean rows book within seconds, anything
+      ambiguous HOLDS with a reason and retries automatically — nothing books silently.
+      Tech-referral upsells pay the sales rep their 9% on the ACV change and also land on
+      the payroll report's "Tech Referral Upsells" sheet for the branch managers.</p>
+    </div>
+
+    <div id="psub-downloads" class="psubpanel">
+      <div class="panel-head">
+        <h2>Report Downloads <span class="sub" id="dl-asof"></span></h2>
+      </div>
+      <div class="dl-cards">
+        <div class="dl-card dl-run" id="dl-run-card" style="display:none">
+          <h3>Lock &amp; run payroll <span class="sub" id="run-period"></span>
+            <span class="badge warn" id="run-pre" hidden>Pre-go-live</span></h3>
+          <p>Books every pending adjustment, pulls fresh PestRoutes data, and
+          generates the period statement. Takes 30–45 minutes; the new period
+          appears in the Payroll report list when it finishes.</p>
+          <div class="dl-row">
+            <button class="year-btn run-btn" id="run-go" disabled>Run payroll</button>
+            <span class="sub" id="run-state"></span>
+          </div>
+        </div>
+        <div class="dl-card">
+          <h3>Payroll report</h3>
+          <p>One pay period as Excel: summary, all commissions, all deductions,
+          tech-referral upsells (for the branch managers), and one sheet per rep.</p>
+          <div class="dl-row">
+            <select id="dl-period"></select>
+            <button class="year-btn" id="dl-period-go">Download .xlsx</button>
+          </div>
+          <div class="dl-pre-note" id="dl-period-note" hidden><b>Pre-go-live</b> —
+          a parallel-run statement, not the basis of pay. The manual payroll sheet
+          paid this period; these numbers are less accurate and for comparison only.</div>
+        </div>
+        <div class="dl-card">
+          <h3>Accounts database</h3>
+          <p>The commission engine's live database: every account's state, plus
+          sheets for <b>pending payment</b> (initial not paid yet), <b>paid but not
+          vested</b>, splits &amp; assignments, and upsell credits.</p>
+          <div class="dl-row">
+            <span id="dl-db-stats" class="sub"></span>
+            <button class="year-btn" id="dl-db-go">Download .xlsx</button>
+          </div>
+        </div>
+        <div class="dl-card">
+          <h3>D2D year-end report</h3>
+          <p>Every door-to-door account upsold by inside sales, for reps tagged
+          with the chosen year (plus a sheet of untagged rows dated that year).
+          For the D2D finance cutoff at the end of January.</p>
+          <div class="dl-row">
+            <select id="dl-year"></select>
+            <button class="year-btn" id="dl-year-go">Download .xlsx</button>
+          </div>
+        </div>
+      </div>
+      <p class="home-note">Reports are built on demand from the commission engine's
+      database on this server. A pay period appears in the list once its payroll run
+      has produced a statement. Periods before go-live are marked PRE-GO-LIVE:
+      the manual payroll sheet paid them.</p>
+    </div>
+
+    <div id="psub-lookup" class="psubpanel active">
+      <div class="panel-head">
+        <h2>Commission Lookup <span class="sub" id="cl-asof"></span></h2>
+        <div class="controls">
+          <input id="cl-q" class="set-search" type="search" autocomplete="off"
+                 placeholder="🔍 Account #, subscription #, or customer name…">
+          <button id="cl-go" class="year-btn">Look up</button>
+        </div>
+      </div>
+      <div id="cl-results"></div>
+      <p class="home-note">Live view of the commission engine's database: every subscription's
+      state, rate, contract value, vesting progress, and the plain-English why. Searches by
+      PestRoutes account number, subscription number, or customer name.</p>
+    </div>
+
+    <div id="psub-rules" class="psubpanel">
+      <div class="panel-head">
+        <h2>Payroll Rules <span class="sub" id="cr-rules-updated"></span></h2>
+      </div>
+      <div id="cr-rules" class="rules-doc"></div>
+      <p class="home-note">Rendered live from the commission engine's own rulebook
+      (COMMISSION_RULES.md) — the single source of truth. Every rule change lands in that file
+      first, so what you read here is exactly what the engine pays by.</p>
+    </div>
+
+    <div id="psub-roster" class="psubpanel">
+      <div class="panel-head">
+        <h2>Commission Roster <span class="sub">who the IS Commissions app actively calculates for</span></h2>
+        <div class="controls set-search-box">
+          <input id="cr-search" class="set-search" type="text" autocomplete="off"
+                 placeholder="🔍 Search sellers to add to the roster…">
+          <div id="cr-search-results" class="set-search-results"></div>
+        </div>
+      </div>
+      <div id="cr-table"></div>
+      <p class="home-note"><b>Inbound</b> agents earn full ISA commission (9% / 5% alt-source /
+      3% no-card). <b>Outbound</b> agents are paid 3% by their own process; on shared accounts the
+      inbound agent keeps the rate minus 3%. This list is what the commission engine will read at
+      go-live — keep it current when agents start or leave.</p>
+    </div>
+  </section>
+
+  <section id="panel-settings" class="panel">
+    <nav class="subtabs" id="settings-subtabs">
+      <button data-ssub="agents" class="active">Agents</button>
+      <button data-ssub="software">Software Management</button>
+      <button data-ssub="users">Users</button>
+    </nav>
+
+    <div id="ssub-agents" class="ssubpanel active">
+    <div class="panel-head">
+      <h2>Settings <span class="sub">key agents, teams, and flags — the source of truth for every tab</span></h2>
+      <div class="controls set-search-box">
+        <input id="set-search" class="set-search" type="text" autocomplete="off"
+               placeholder="🔍 Search office-staff sellers to add…">
+        <div id="set-search-results" class="set-search-results"></div>
+      </div>
+    </div>
+    <div id="set-table"></div>
+    <p class="home-note">Search any office-staff rep who's sold subscriptions (from
+    PestRoutes) to add them. Click <b>Edit</b> on a tracked agent to change their
+    team or flags. Key agents appear on IS #'s &amp; Team Metrics; Power Score
+    excludes outbound reps; Team drives the Team Metrics split.</p>
+    <div id="set-config"></div>
+    </div>
+
+    <div id="ssub-software" class="ssubpanel">
+      <div class="panel-head">
+        <h2>Software Management <span class="sub">every Brooks app and every data connection &middot; checked live when you open this tab</span></h2>
+        <div class="controls">
+          <span id="sw-checked" class="sub"></span>
+          <button id="sw-refresh" class="year-btn" title="Check every server again now">&#x21bb; Refresh</button>
+        </div>
+      </div>
+      <div id="sw-hosts" class="sw-hosts"></div>
+      <div id="sw-apps" class="sw-apps"></div>
+      <p class="home-note">Status is gathered on demand over a locked-down SSH key that can only run the
+      read-only status agent on each server &mdash; nothing polls in the background. Click an app for its
+      data connections and what the last run did.</p>
+    </div>
+
+    <div id="ssub-users" class="ssubpanel">
+      <div class="panel-head">
+        <h2>Users <span class="sub">who can sign in, and what they can see</span></h2>
+        <div class="controls">
+          <button id="us-invite" class="nav-btn primary">+ Invite user</button>
+        </div>
+      </div>
+      <div id="us-table"></div>
+      <p class="home-note">People sign in with their email and a one-time code &mdash; there are no
+      passwords to manage. Disabling a user signs them out immediately.</p>
+      <p class="home-note">Each box is one tab or sub-tab. A person only sees &mdash; and the
+      server only sends them &mdash; what's ticked. Changes apply the next time they load a page.
+      Agent logins get their own single page instead of the tabs.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <span id="foot-note"></span>
+  <span id="who" style="float:right"></span>
+</footer>
+
+<script src="app.js?v=168"></script>
+</body>
+</html>

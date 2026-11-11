@@ -1,0 +1,5 @@
+# Everything here runs on a Linux server: keep line endings LF on every machine
+# (CRLF once broke the status agent's first line on all three servers).
+* text=auto eol=lf
+*.png binary
+*.ico binary

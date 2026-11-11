@@ -1,0 +1,12 @@
+source,provider,group
+# Dashboard-owned grouping overrides — layered ON TOP of the sourcing app's
+# read-only dispute_groups.csv (we never edit that file). Only our deltas go here.
+# Same columns as dispute_groups.csv: a non-empty "source" OR "provider" cell maps
+# to "group". Rows here win over the base file.
+#
+# Merge DoLead's form channel into the DoLead group so it shows as one line.
+,DoLead Form,DoLead
+#
+# Bing has its own spend line on the spend sheet, so it is its own group here
+# instead of folding into Eforce (Dallin, 2026-10-08).
+,Bing,Bing
