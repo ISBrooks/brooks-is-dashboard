@@ -48,6 +48,28 @@ import sample_data  # noqa: E402
 from isadash import cache, webapp  # noqa: E402
 
 
+def set_settings(settings, **changes) -> dict:
+    """Change fields on the (normally read-only) settings object in place.
+    Returns the previous values so a test can put them back."""
+    old = {k: getattr(settings, k) for k in changes}
+    for k, v in changes.items():
+        object.__setattr__(settings, k, v)
+    return old
+
+
+@pytest.fixture()
+def override_settings(app):
+    """override_settings(app_password="x", ...) for one test; undone afterwards."""
+    undo = []
+
+    def change(**changes):
+        undo.append(set_settings(app._settings, **changes))
+
+    yield change
+    for old in reversed(undo):
+        set_settings(app._settings, **old)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def frozen_clock():
     with freeze_time(sample_data.NOW, tick=False):
@@ -80,9 +102,10 @@ def app(tmp_path_factory, frozen_clock, no_network):
     db, fl, master = d / "isadash.sqlite", d / "attribution.sqlite", d / "sourcing_master.csv"
     sample_data.build(db, fl, master)
 
-    webapp._settings = dataclasses.replace(
-        webapp._settings, db_path=db, formleads_db=str(fl), sourcing_master=str(master),
-        app_password="", admin_password="")
+    # Changed in place, not replaced: every module that holds the settings object
+    # (the server code is spread over several files) must see the same values.
+    set_settings(webapp._settings, db_path=db, formleads_db=str(fl), sourcing_master=str(master),
+                 app_password="", admin_password="")
     cache.configure(db)
     cache.clear()
     return webapp

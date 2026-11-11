@@ -8,7 +8,6 @@ temp folder on every start), there is no sign-in, the real .env is ignored and
 the outside services have placeholder credentials, so the tabs that need
 Genesys, VoiceOps or a Google sheet show their "unavailable" state.
 """
-import dataclasses
 import os
 import re
 import sys
@@ -46,9 +45,10 @@ if __name__ == "__main__":
     d = Path(tempfile.mkdtemp(prefix="isadash_sample_"))
     db, fl, master = d / "isadash.sqlite", d / "attribution.sqlite", d / "sourcing_master.csv"
     sample_data.build(db, fl, master)
-    webapp._settings = dataclasses.replace(
-        webapp._settings, db_path=db, formleads_db=str(fl), sourcing_master=str(master),
-        app_password="", admin_password="")
+    # changed in place so every module holding the settings object sees it
+    for _k, _v in dict(db_path=db, formleads_db=str(fl), sourcing_master=str(master),
+                       app_password="", admin_password="").items():
+        object.__setattr__(webapp._settings, _k, _v)
     cache.configure(db)
     print(f"sample database: {db}")
     uvicorn.run(webapp.app, host="127.0.0.1", port=8378)

@@ -6,7 +6,6 @@ shown at once and a live period is refreshed on a side thread.
 """
 from __future__ import annotations
 
-import dataclasses
 import sqlite3
 import threading
 
@@ -36,7 +35,7 @@ class FakeVoiceOps:
 
 
 @pytest.fixture()
-def quality(app, monkeypatch):
+def quality(app, monkeypatch, override_settings):
     db = app._settings.db_path
     c = sqlite3.connect(db)
     c.execute("UPDATE agent_map SET voiceops_email = lower(replace(genesys_name, ' ', '.')) || '@example.test' "
@@ -45,8 +44,7 @@ def quality(app, monkeypatch):
     c.commit()
     names = [r[0] for r in c.execute("SELECT genesys_name FROM agent_map WHERE scorecard = 1")]
     c.close()
-    monkeypatch.setattr(app, "_settings", dataclasses.replace(
-        app._settings, voiceops_client_id="id", voiceops_client_secret="secret"))
+    override_settings(voiceops_client_id="id", voiceops_client_secret="secret")
     monkeypatch.setattr(voiceops, "VoiceOpsClient", FakeVoiceOps)
     FakeVoiceOps.calls = []
     FakeVoiceOps.gate = threading.Event()

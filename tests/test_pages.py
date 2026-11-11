@@ -3,7 +3,6 @@ page at each of them, keep the sign-in wall in front, and stay in step with the
 router's list."""
 from __future__ import annotations
 
-import dataclasses
 import re
 from pathlib import Path
 
@@ -41,8 +40,8 @@ def test_assets_load_from_any_address(client):
         assert client.get(asset).status_code == 200, asset
 
 
-def test_sign_in_wall_covers_tab_addresses(app, client, monkeypatch):
-    monkeypatch.setattr(app, "_settings", dataclasses.replace(app._settings, app_password="secret"))
+def test_sign_in_wall_covers_tab_addresses(app, client, override_settings):
+    override_settings(app_password="secret")
     r = client.get("/marketing/spend-roas")
     assert r.status_code == 200 and "/js/main.js" not in r.text               # the sign-in page instead
     assert "location.reload()" in r.text                                       # ...which returns here after signing in
