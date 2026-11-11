@@ -92,6 +92,21 @@ Spelling mismatches go in `config/name_overrides.json`.
 - FR rate limit 900 reads/min shared with the nightly dedupe job and the
   5-min Podium sync — pace the dashboard's pulls.
 
+## Where the code lives
+
+- `src/isadash/webapp.py` assembles the web app. The endpoints are in
+  `src/isadash/api/`, one module per area of the site: `home`, `revenue`,
+  `agent_metrics`, `team_metrics`, `marketing`, `managers` (the Schedule tab),
+  `payroll`, `settings`, `agent_page`, `accounts`, on top of `common` (sign-in,
+  access rules and calculations more than one tab uses).
+- The other modules in `src/isadash/` are the data sources and domain logic
+  (`fieldroutes`, `genesys`, `voiceops`, `podium`, `timeclock`, `pto`, `sync`, ...).
+- `web/` is the page: `index.html`, `router.js` (tab addresses) and `web/js/`,
+  one script file per tab.
+- `tests/` runs every data feed against a made-up sample database
+  (`python -m pytest`). `scripts/serve_sample.py` runs the site locally on that
+  same made-up data.
+
 ## Deploying
 
 Production runs whatever is on the `main` branch of this repository: a push to
