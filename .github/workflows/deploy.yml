@@ -1,0 +1,74 @@
+name: Test and deploy
+
+# Every push to main is tested; if the tests pass (and deploys are switched on)
+# the droplet is told to pull that version and go live. See deploy/DEPLOY.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# one deploy at a time, in order; never cancel one that is half way through
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Check the code
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install the app's packages
+        run: pip install -r requirements.txt
+      - name: Python files compile
+        run: python -m compileall -q src scripts deploy
+      - name: Page script parses
+        run: node --check web/app.js
+      - name: Shell scripts parse
+        run: |
+          bash -n deploy/isdash-deploy.sh
+          bash -n deploy/setup-git-deploy.sh
+      - name: App starts
+        # placeholders only: the real settings live in .env on the droplet, never in git.
+        # Importing the app makes no network calls, so these are never used.
+        env:
+          PESTROUTES_BASE_URL: https://placeholder.invalid
+          PESTROUTES_AUTH_KEY: placeholder
+          GENESYS_CLIENT_ID: placeholder
+          GENESYS_INSIDE_SALES_QUEUE_IDS: placeholder
+        run: |
+          PYTHONPATH=src python -c "import isadash.webapp as w; print(len(w.app.routes), 'routes')"
+
+  deploy:
+    name: Deploy to the droplet
+    needs: test
+    # DEPLOY_ENABLED is a repository variable: deploys stay off until it is 'true'
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Tell the droplet to deploy main
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # this key is pinned on the server to the deploy command and nothing else
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+              -o ServerAliveInterval=30 "root@$DEPLOY_HOST" deploy
+      - name: Remove the key from the runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
