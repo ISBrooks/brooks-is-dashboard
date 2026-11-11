@@ -18,13 +18,14 @@ import hashlib
 import html as _html
 import hmac
 import json
+import re
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import auth, cache
@@ -388,7 +389,14 @@ async def _gate(request: Request, call_next):
                        "?" + request.url.query if request.url.query else "", _ms)
     resp.headers["X-Robots-Tag"] = _NOINDEX
     if not path.startswith("/api"):
-        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        # A script or style requested with its fingerprint (?v=..., added by
+        # _index_html) can be kept for good: the address changes when the file
+        # does. Everything else is re-checked with the server on every load.
+        if (resp.status_code == 200 and request.query_params.get("v")
+                and path.endswith((".js", ".css"))):
+            resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+        else:
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
     return resp
 
 
@@ -6690,10 +6698,43 @@ _APP_PAGES = ("revenue", "agent-metrics", "team-metrics", "marketing", "schedule
               "payroll", "settings", "my")
 
 
-def _app_page(rest: str = "") -> FileResponse:
-    return FileResponse(WEB_DIR / "index.html")
+_ASSET_RE = re.compile(r'(?P<attr>src|href)="(?P<path>/(?:js/[\w.-]+\.js|router\.js|style\.css))(?:\?v=\w*)?"')
+_index_cache: dict = {"key": None, "assets": [], "html": ""}
 
 
+def _index_html() -> str:
+    """index.html with every script and style address stamped with a
+    fingerprint of that file's contents (/js/home.js?v=3f2a9c1d07). Browsers may
+    then keep each file until it actually changes, and nobody has to remember
+    to bump a version number. Rebuilt whenever the page or one of the files
+    changes on disk, so a deploy that only touches web/ needs no restart."""
+    index = WEB_DIR / "index.html"
+
+    def stamp(p: Path) -> tuple:
+        st = p.stat()
+        return (st.st_mtime_ns, st.st_size)
+
+    def key_for(assets: list) -> tuple:
+        return (stamp(index),) + tuple(stamp(WEB_DIR / a.lstrip("/")) for a in assets)
+
+    try:
+        key = key_for(_index_cache["assets"])
+    except OSError:
+        key = None
+    if key is None or key != _index_cache["key"]:
+        raw = index.read_text(encoding="utf-8")
+        assets = sorted({m.group("path") for m in _ASSET_RE.finditer(raw)})
+        tag = {a: hashlib.sha1((WEB_DIR / a.lstrip("/")).read_bytes()).hexdigest()[:10] for a in assets}
+        html = _ASSET_RE.sub(lambda m: f'{m.group("attr")}="{m.group("path")}?v={tag[m.group("path")]}"', raw)
+        _index_cache.update(key=key_for(assets), assets=assets, html=html)
+    return _index_cache["html"]
+
+
+def _app_page(rest: str = "") -> HTMLResponse:
+    return HTMLResponse(_index_html())
+
+
+app.add_api_route("/", _app_page, methods=["GET"], include_in_schema=False)
 for _page in _APP_PAGES:
     app.add_api_route(f"/{_page}", _app_page, methods=["GET"], include_in_schema=False)
     app.add_api_route(f"/{_page}/{{rest:path}}", _app_page, methods=["GET"], include_in_schema=False)

@@ -31,8 +31,10 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Python files compile
         run: python -m compileall -q src scripts deploy
-      - name: Page script parses
-        run: node --check web/app.js
+      - name: Page scripts parse and load together
+        run: |
+          for f in web/router.js web/js/*.js; do node --check "$f"; done
+          node scripts/check_web_js.js
       - name: Shell scripts parse
         run: |
           bash -n deploy/isdash-deploy.sh

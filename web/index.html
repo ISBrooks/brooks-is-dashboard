@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/brand/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png">
 <meta name="theme-color" content="#1e3659">
-<link rel="stylesheet" href="/style.css?v=109">
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header>
@@ -715,7 +715,21 @@
   <span id="who" style="float:right"></span>
 </footer>
 
-<script src="/router.js?v=1"></script>
-<script src="/app.js?v=169"></script>
+<!-- The page's scripts, in load order. The server adds a fingerprint (?v=...) to
+     each address, so browsers keep a file until its contents change: no version
+     numbers to bump by hand. To add a file, list it here (scripts/check_web_js.js
+     fails the tests if a file in web/js/ is missing from this list). -->
+<script src="/router.js"></script>
+<script src="/js/core.js"></script>
+<script src="/js/home.js"></script>
+<script src="/js/revenue.js"></script>
+<script src="/js/agent-metrics.js"></script>
+<script src="/js/team-metrics.js"></script>
+<script src="/js/marketing.js"></script>
+<script src="/js/schedule.js"></script>
+<script src="/js/payroll.js"></script>
+<script src="/js/settings.js"></script>
+<script src="/js/agent-page.js"></script>
+<script src="/js/main.js"></script>
 </body>
 </html>
