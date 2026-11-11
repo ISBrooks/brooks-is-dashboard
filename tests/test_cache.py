@@ -60,7 +60,8 @@ def test_sign_ins_and_clock_punches_discard_nothing(warm):
     write(warm, "UPDATE login_codes SET attempts = attempts + 1 WHERE email = 't@example.test'")
     write(warm, "DELETE FROM login_codes WHERE email = 't@example.test'")
     from isadash import timeclock
-    conn = warm.connect(warm._settings.db_path)
+    from isadash.store import connect
+    conn = connect(warm._settings.db_path)
     try:
         timeclock.ensure(conn)                       # the real punches table
         conn.execute("INSERT INTO punches (agent, in_at, created_at) VALUES "
@@ -104,7 +105,10 @@ def test_callers_cannot_damage_the_saved_copy(warm):
 
 
 def test_a_write_during_a_calculation_marks_it_stale(warm, monkeypatch):
-    real = warm._roster_sub_rows
+    import sys
+    # patch the name where the trends feed looks it up: its own module
+    home = sys.modules[warm.api_home_trends.__module__]
+    real = home._roster_sub_rows
 
     def slow(conn):
         out = real(conn)
@@ -112,9 +116,9 @@ def test_a_write_during_a_calculation_marks_it_stale(warm, monkeypatch):
         return out
 
     write(warm, "UPDATE agent_map SET team = team WHERE rowid = (SELECT MIN(rowid) FROM agent_map)")
-    monkeypatch.setattr(warm, "_roster_sub_rows", slow)
+    monkeypatch.setattr(home, "_roster_sub_rows", slow)
     warm.api_home_trends()
-    monkeypatch.setattr(warm, "_roster_sub_rows", real)
+    monkeypatch.setattr(home, "_roster_sub_rows", real)
     assert not cache.is_fresh(warm.api_home_trends)
     warm.api_home_trends()
     assert cache.is_fresh(warm.api_home_trends)
