@@ -91,3 +91,10 @@ Spelling mismatches go in `config/name_overrides.json`.
 - FR returns datetimes in office-local (Pacific) time, not UTC.
 - FR rate limit 900 reads/min shared with the nightly dedupe job and the
   5-min Podium sync — pace the dashboard's pulls.
+
+## Deploying
+
+Production runs whatever is on the `main` branch of this repository: a push to
+`main` is tested and then deployed to the droplet automatically. Never copy files
+to the server by hand. How it works, how to undo a change and how to pause
+deploys: [deploy/DEPLOY.md](deploy/DEPLOY.md).
