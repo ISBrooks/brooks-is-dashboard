@@ -54,9 +54,21 @@ def test_saved_equals_fresh(warm):
 
 def test_sign_ins_and_clock_punches_discard_nothing(warm):
     write(warm, "INSERT INTO auth_log (at, event, email, ip, detail) VALUES ('x', 'test', 't', 't', 't')")
-    write(warm, "CREATE TABLE IF NOT EXISTS punches (id INTEGER PRIMARY KEY, agent TEXT, in_at TEXT)")
-    write(warm, "INSERT INTO punches (agent, in_at) VALUES ('Avery Stone', '2026-11-10T16:00:00')")
-    write(warm, "DELETE FROM punches WHERE agent = 'Avery Stone' AND in_at = '2026-11-10T16:00:00'")
+    # real tables only: a stand-in table with the wrong columns would break the
+    # time-clock feeds for every test that runs after this one
+    write(warm, "INSERT INTO login_codes (email, code_hash, created_at, expires_at) VALUES ('t@example.test', 'x', 'x', 'x')")
+    write(warm, "UPDATE login_codes SET attempts = attempts + 1 WHERE email = 't@example.test'")
+    write(warm, "DELETE FROM login_codes WHERE email = 't@example.test'")
+    from isadash import timeclock
+    conn = warm.connect(warm._settings.db_path)
+    try:
+        timeclock.ensure(conn)                       # the real punches table
+        conn.execute("INSERT INTO punches (agent, in_at, created_at) VALUES "
+                     "('Avery Stone', '2026-11-10T16:00:00+00:00', '2026-11-10T16:00:00+00:00')")
+        conn.execute("DELETE FROM punches WHERE agent = 'Avery Stone' AND in_at = '2026-11-10T16:00:00+00:00'")
+        conn.commit()
+    finally:
+        conn.close()
     for name, fn, kw in feeds(warm):
         assert cache.is_fresh(fn, **kw), name
 
