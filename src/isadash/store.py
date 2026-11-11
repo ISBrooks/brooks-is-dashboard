@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from . import cache
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
     conversation_id TEXT PRIMARY KEY,
@@ -170,6 +172,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=30000")
     conn.executescript(SCHEMA)
     _migrate(conn)
+    cache.watch(conn)       # after setup: record only what the caller's queries read
     return conn
 
 
@@ -216,6 +219,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         # (gmail/outlook/icloud) rather than Genesys ids or company mail — so
         # the link has to be stored per agent, seeded by name and then editable.
         conn.execute("ALTER TABLE agent_map ADD COLUMN voiceops_email TEXT")
+    # No index on subscriptions(date_added_utc): measured 2026-11-11, it made
+    # 30-day queries ~20 ms faster but year-to-date ones ~300 ms slower (a year
+    # is ~15% of the table, where a straight scan beats index hops).
     conn.commit()
 
 

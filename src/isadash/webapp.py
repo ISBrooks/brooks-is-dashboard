@@ -18,21 +18,38 @@ import hashlib
 import html as _html
 import hmac
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth
+from . import auth, cache
 from .config import load_settings
 from .report import Bucket, aggregate, week_to_date_label
 from .store import connect
 
 app = FastAPI(title="Brooks IS Dashboard")
 _settings = load_settings()
-_cache: dict = {"mtime": None, "payload": None}
+cache.configure(_settings.db_path)
+
+# Performance log (journalctl -u brooks-is-dash | grep -E "cache:|slow:"): which
+# saved results were rebuilt and why, and any request slower than a second.
+_perf_log = logging.getLogger("isadash.perf")
+if not _perf_log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(message)s"))
+    _perf_log.addHandler(_h)
+    _perf_log.setLevel(logging.INFO)
+    _perf_log.propagate = False
+_SLOW_MS = 1000
+# How long a new form lead may take to show up in form-lead numbers. The sourcing
+# app's database changes every few minutes all day and rebuilding the lead list
+# from it takes several seconds, so it is re-read at most this often. A Sync
+# (manual or the morning one) always refreshes it. 0 = re-read on every change.
+_FORM_LAG_S = 900
 
 
 # --- access control -------------------------------------------------------
@@ -362,7 +379,12 @@ async def _gate(request: Request, call_next):
         resp = JSONResponse({"error": "locked"}, status_code=403)
         resp.headers["X-Robots-Tag"] = _NOINDEX
         return resp
+    _t0 = time.perf_counter()
     resp = await call_next(request)
+    _ms = (time.perf_counter() - _t0) * 1000
+    if _ms >= _SLOW_MS and path.startswith("/api"):
+        _perf_log.info("slow: %s %s%s %.0f ms", request.method, path,
+                       "?" + request.url.query if request.url.query else "", _ms)
     resp.headers["X-Robots-Tag"] = _NOINDEX
     if not path.startswith("/api"):
         resp.headers["Cache-Control"] = "no-cache, must-revalidate"
@@ -435,6 +457,28 @@ def _roster_names(conn) -> list[str]:
 def _timeclock_startup() -> None:
     from . import timeclock
     timeclock.start_sweeper(_settings, connect, _roster_names)
+
+
+def _warm_calls() -> list:
+    """What the Home tab asks for on load, with the same arguments the page
+    sends (web/app.js: loadHome, loadHomeYtd) so a visitor finds them ready."""
+    from .periods import PACIFIC
+    now = datetime.now(timezone.utc)
+    year = now.astimezone(PACIFIC).year
+    return [
+        (_get_form_events, {}),
+        (_build_payload, {}),
+        (api_home, {}),
+        (api_home_trends, {}),
+        # the page builds this range in the browser: Jan 1 .. today's UTC date
+        (api_scorecard, {"start_day": f"{year}-01-01", "end_day": now.date().isoformat(), "mode": "sold"}),
+        (api_revenue, {"year": year}),      # behind /api/home_ytd
+    ]
+
+
+@app.on_event("startup")
+def _cache_startup() -> None:
+    cache.start_warmer(_warm_calls)
 
 
 # ---- time clock (agent) + timesheets / agent records (IS Managers) ----------
@@ -1313,6 +1357,7 @@ def _rows_for(table: dict[str, dict[str, Bucket]]) -> list[dict]:
     return rows
 
 
+@cache.cached(copy_result=False)     # ~650 KB, read-only: every caller shares one object
 def _build_payload() -> dict:
     from .adjust import adjustment_stats
     from .periods import PACIFIC, UTC
@@ -1382,51 +1427,55 @@ def _build_payload() -> dict:
     }
 
 
+# /api/data as ready-to-send JSON, rebuilt only when the payload object changes
+_data_json: dict = {"src": None, "full": b"", "lite": b""}
+
+
+def _json_bytes(obj) -> bytes:
+    # the same encoding FastAPI's JSONResponse uses
+    return json.dumps(obj, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+
+
 @app.get("/api/data")
-def api_data(request: Request) -> dict:
-    mtime = _settings.db_path.stat().st_mtime if _settings.db_path.exists() else 0
-    if _cache["mtime"] != mtime:
-        _cache["payload"] = _build_payload()
-        _cache["mtime"] = mtime
-    payload = _cache["payload"]
+def api_data(request: Request) -> Response:
+    payload = _build_payload()
+    if _data_json["src"] is not payload:
+        lite = {k: payload[k] for k in ("coverage", "generated_at") if k in payload}
+        _data_json.update(src=payload, full=_json_bytes(payload), lite=_json_bytes(lite))
     # everyone gets the header's coverage line; the per-agent weekly/monthly
     # rows behind Phone Conversion + Trends need one of those permissions
     have = _perms(request)
-    if not ({"metrics.phone.conv", "metrics.phone.trends"} & have):
-        return {k: payload[k] for k in ("coverage", "generated_at") if k in payload}
-    return payload
+    full = bool({"metrics.phone.conv", "metrics.phone.trends"} & have)
+    return Response(_data_json["full" if full else "lite"], media_type="application/json")
 
 
-_fl_cache: dict = {"key": None, "payload": None, "events": None}
-
-
+@cache.cached(copy_result=False)     # tens of thousands of events, read-only for every caller
 def _get_form_events():
-    """Build + classify form-lead events, cached on both DBs' mtimes."""
+    """Build + classify form-lead events. Saved until the dashboard tables it
+    reads change, or the sourcing app's database changed and the saved copy is
+    older than _FORM_LAG_S."""
     from .formleads import (aggregate_events, build_lead_events,
                             classify_events, load_source_names)
     fl_path = Path(_settings.formleads_db)
+    cache.depend_on_file(fl_path, _FORM_LAG_S)
+    if _settings.sourcing_master:
+        cache.depend_on_file(_settings.sourcing_master)
     if not fl_path.exists():
         return None, {"error": f"FORMLEADS_DB not found: {fl_path}"}
-    key = (fl_path.stat().st_mtime,
-           _settings.db_path.stat().st_mtime if _settings.db_path.exists() else 0)
-    if _fl_cache["key"] != key:
-        events = build_lead_events(str(fl_path), _settings.form_dedup_window_hours,
-                                   tuple(_settings.form_exclude_sources),
-                                   tuple(_settings.form_exclude_source_days))
-        conn = connect(_settings.db_path)
-        try:
-            n_cust = conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
-            classify_events(conn, events, _settings.form_conversion_window_days)
-        finally:
-            conn.close()
-        payload = aggregate_events(events, load_source_names(_settings.sourcing_master))
-        payload["customers_loaded"] = n_cust
-        payload["conversion_window_days"] = _settings.form_conversion_window_days
-        payload["dedup_window_hours"] = _settings.form_dedup_window_hours
-        _fl_cache["payload"] = payload
-        _fl_cache["events"] = events
-        _fl_cache["key"] = key
-    return _fl_cache["events"], _fl_cache["payload"]
+    events = build_lead_events(str(fl_path), _settings.form_dedup_window_hours,
+                               tuple(_settings.form_exclude_sources),
+                               tuple(_settings.form_exclude_source_days))
+    conn = connect(_settings.db_path)
+    try:
+        n_cust = conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
+        classify_events(conn, events, _settings.form_conversion_window_days)
+    finally:
+        conn.close()
+    payload = aggregate_events(events, load_source_names(_settings.sourcing_master))
+    payload["customers_loaded"] = n_cust
+    payload["conversion_window_days"] = _settings.form_conversion_window_days
+    payload["dedup_window_hours"] = _settings.form_dedup_window_hours
+    return events, payload
 
 
 @app.get("/api/formleads")
@@ -1463,6 +1512,7 @@ def _phone_window_stats(conn, start_utc: str, end_utc: str) -> dict:
 
 
 @app.get("/api/home")
+@cache.cached()
 def api_home() -> dict:
     """Home cards. Every window is WHOLE Pacific calendar days ending
     YESTERDAY (today is never included — no partial-day noise), and the
@@ -1647,6 +1697,7 @@ def api_home() -> dict:
 
 
 @app.get("/api/revenue")
+@cache.cached()
 def api_revenue(year: int = 0) -> dict:
     d = dict(_revenue_data(year))
     d.pop("_people", None)
@@ -2145,6 +2196,7 @@ def api_home_servicelevel() -> dict:
 
 
 @app.get("/api/home_trends")
+@cache.cached()
 def api_home_trends() -> dict:
     """13 weekly points for each home metric — the last-90-days sparklines.
     Same definitions as the home cards, bucketed into full Sunday–Saturday
@@ -3387,7 +3439,11 @@ def api_leaked(days: int = 30, start_day: str = "", end_day: str = "") -> dict:
     return {"days": days, "summary": summary, "rows": rows}
 
 
+# With no dates given the window is "the last N days up to this minute", which
+# drifts with the clock - keep that form only briefly. Explicit dates are saved
+# until the data changes.
 @app.get("/api/scorecard")
+@cache.cached(ttl=lambda a: None if (a.get("start_day") and a.get("end_day")) else 300)
 def api_scorecard(start_day: str = "", end_day: str = "", days: int = 30,
                   mode: str = "sold") -> dict:
     """Per-agent pay-period scorecard (the agents flagged scorecard=1).

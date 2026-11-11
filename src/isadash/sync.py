@@ -391,6 +391,11 @@ def _sync_worker(settings) -> None:
         STATE["running"] = False
         STATE["step"] = None
         STATE["finished"] = datetime.now(timezone.utc).isoformat()
+        try:        # saved results that tolerate a short lag (form leads) refresh now
+            from . import cache
+            cache.clear()
+        except Exception:  # noqa: BLE001 - never let this break a sync's wrap-up
+            log.exception("could not clear saved results after sync")
         # Persist this run's step-by-step outcome so the Software Management tab
         # can show, per data feed, what the last sync actually did — durable
         # across restarts, and covering the nightly (a separate process) as well
