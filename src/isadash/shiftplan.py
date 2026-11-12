@@ -107,6 +107,20 @@ def week_rows(conn, monday: date) -> dict[str, list]:
     return out
 
 
+def shift_stamps(conn, monday: date) -> dict[str, list]:
+    """{agent: [{"by", "at"} or None for Mon..Sun]}: who last set each shift in
+    the week and when (UTC). Only shifts that exist have one — a removed shift
+    leaves nothing behind, and there is no history of earlier values."""
+    sunday = monday + timedelta(days=6)
+    out: dict[str, list] = {}
+    for r in conn.execute("SELECT agent, day, updated_by, updated_at FROM shifts WHERE day BETWEEN ? AND ?",
+                          (monday.isoformat(), sunday.isoformat())):
+        if r["updated_at"]:
+            k = (date.fromisoformat(r["day"]) - monday).days
+            out.setdefault(r["agent"], [None] * 7)[k] = {"by": r["updated_by"], "at": r["updated_at"]}
+    return out
+
+
 def published_weeks(conn) -> dict[str, dict[str, list] | None]:
     """{monday_iso: {agent: [7 cells]}} for every PUBLISHED week, and
     {monday_iso: None} for every DRAFT week. The agent page, the day roster and
@@ -171,23 +185,33 @@ def week(conn, monday: date, agents: list[str], time_off: dict | None = None) ->
     meta = conn.execute("SELECT * FROM schedule_weeks WHERE monday = ?", (monday.isoformat(),)).fetchone()
     rows = week_rows(conn, monday)
     names = sorted(set(agents) | set(rows))
+    stamps = shift_stamps(conn, monday)
     grid = []
+    working: dict[str, list] = {}       # the week as it will actually be worked: time-off days blanked
     for a in names:
         cells = list(rows.get(a, [""] * 7))
         off = []
         for k in range(7):
             kind = (time_off or {}).get(a, {}).get((monday + timedelta(days=k)).isoformat())
             off.append("PTO" if kind == "pto" else "Unpaid" if kind else "")
-        segs = [sched.shift_segments(c) for c in cells]
-        grid.append({"agent": a, "cells": cells, "off": off,
+        # A shift saved before the time off was approved stays in the table (it
+        # splits the PTO hours by day, and comes back if the approval is revoked),
+        # but that person isn't working it: it must not count toward coverage,
+        # the Hrs total or the day's sort order.
+        on = ["" if off[k] else c for k, c in enumerate(cells)]
+        working[a] = on
+        segs = [sched.shift_segments(c) for c in on]
+        grid.append({"agent": a, "cells": cells, "off": off, "changed": stamps.get(a, [None] * 7),
                      "starts": [s[0][0] if s else None for s in segs],
                      "lengths": [sum(b - x for x, b in s) for s in segs],
-                     "hours": round(sum((sched.shift_hours(c) or 0) for c in cells), 2)})
+                     "hours": round(sum((sched.shift_hours(c) or 0) for c in on), 2)})
     prev = week_rows(conn, monday - timedelta(days=7))
     return {"monday": monday.isoformat(), "sunday": (monday + timedelta(days=6)).isoformat(),
             "exists": bool(meta), "published": bool(meta and meta["published"]),
-            "published_at": meta["published_at"] if meta else None, "created_from": meta["created_from"] if meta else None,
-            "agents": grid, "coverage": coverage(rows), "presets": PRESETS, "targets": coverage_targets(conn),
+            "published_at": meta["published_at"] if meta else None, "published_by": meta["published_by"] if meta else None,
+            "created_from": meta["created_from"] if meta else None,
+            "created_by": meta["created_by"] if meta else None, "created_at": meta["created_at"] if meta else None,
+            "agents": grid, "coverage": coverage(working), "presets": PRESETS, "targets": coverage_targets(conn),
             "prev_week_exists": bool(prev),
             "templates": [{"id": r["id"], "name": r["name"]} for r in conn.execute("SELECT id, name FROM shift_templates ORDER BY name")]}
 

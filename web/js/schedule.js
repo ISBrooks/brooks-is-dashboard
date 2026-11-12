@@ -106,13 +106,16 @@ async function loadTimeOffQueue() {
     if (!r.ok) { toast(j.error || "That didn't work.", "warn"); return false; }
     return j;
   };
+  const stamp = clockStamp;
   const row = (r, buttons) => {
     const el = document.createElement("div"); el.className = "to-row";
-    el.innerHTML = `<span class="st ${escHtml(r.status)}">${escHtml(r.status)}</span><b>${escHtml(r.agent)}</b><span>${fmtD(r.start_day)}${r.end_day !== r.start_day ? " – " + fmtD(r.end_day) : ""}</span>` +
+    const decided = r.decided_at ? `${r.status} ${stamp(r.decided_at)}${r.decided_by ? " by " + r.decided_by : ""} (Mountain time)` : "";
+    el.innerHTML = `<span class="st ${escHtml(r.status)}" title="${escHtml(decided)}">${escHtml(r.status)}</span><b>${escHtml(r.agent)}</b><span>${fmtD(r.start_day)}${r.end_day !== r.start_day ? " – " + fmtD(r.end_day) : ""}</span>` +
       `<span>${escHtml(toKind(r))}</span>` + (r.balance != null ? `<span class="sub">balance ${r.balance.toFixed(2)} h</span>` : "") +
       (r.note ? `<span class="sub">“${escHtml(r.note)}”</span>` : "") + (r.decision_note ? `<span class="sub">manager: ${escHtml(r.decision_note)}</span>` : "") +
-      (r.entered_by ? `<span class="sub" title="Entered by a manager">entered by ${escHtml(r.entered_by)}</span>` : "") +
-      (r.edited_by ? `<span class="sub" title="${escHtml(r.edited_at || "")}">edited by ${escHtml(r.edited_by)}</span>` : "");
+      (r.entered_by ? `<span class="sub" title="Entered by a manager (Mountain time)">entered by ${escHtml(r.entered_by)} ${stamp(r.requested_at)}</span>`
+        : r.requested_at ? `<span class="sub" title="When the agent sent this request (Mountain time)">requested ${stamp(r.requested_at)}</span>` : "") +
+      (r.edited_by ? `<span class="sub" title="Last changed by a manager (Mountain time)">edited by ${escHtml(r.edited_by)} ${stamp(r.edited_at)}</span>` : "");
     for (const b of buttons) el.appendChild(b);
     return el;
   };
@@ -275,6 +278,15 @@ function clockTime(iso) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: CLOCK_TZ });
 }
 
+// when something happened, in Mountain time: "Nov 3, 2:14 PM" (the year is added when it isn't this year)
+function clockStamp(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const o = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: CLOCK_TZ };
+  if (d.getFullYear() !== new Date().getFullYear()) o.year = "numeric";
+  return d.toLocaleString("en-US", o);
+}
+
 function clockLocal(iso) {
   if (!iso) return "";
   const parts = {};
@@ -333,6 +345,20 @@ function renderBuilder(d) {
   pill.className = "pill " + (d.published ? "pub" : d.exists ? "" : "none");
   pill.textContent = d.published ? "Published" : d.exists ? "Draft — agents can't see this week until you publish it" : "Not created — agents see the sheet";
   acts.appendChild(pill);
+  // who published (or, for a draft, created) the week and when
+  const by = (who) => (who ? ` by ${who}` : "");
+  const made = d.created_at ? `Week created ${clockStamp(d.created_at)}${by(d.created_by)} (Mountain time)` : "";
+  if (d.published && d.published_at) {
+    const s = document.createElement("span"); s.className = "sub";
+    s.textContent = `${clockStamp(d.published_at)}${by(d.published_by)}`;
+    s.title = `Published ${clockStamp(d.published_at)}${by(d.published_by)} (Mountain time).${made ? " " + made + "." : ""}`;
+    acts.appendChild(s);
+  } else if (d.exists && d.created_at) {
+    const s = document.createElement("span"); s.className = "sub";
+    s.textContent = `created ${clockStamp(d.created_at)}${by(d.created_by)}`;
+    s.title = made + ".";
+    acts.appendChild(s);
+  }
   const btn = (label, fn, primary) => { const b = document.createElement("button"); b.className = "year-btn" + (primary ? " active" : ""); b.textContent = label; b.addEventListener("click", fn); acts.appendChild(b); return b; };
   if (!d.exists) {
     if (d.prev_week_exists) btn("Create from last week", () => createWeek("last"), true);
@@ -426,6 +452,8 @@ function shiftGrid(o) {
       el.className = "sb-cell " + (offKind ? "pto" : cell ? "on" : "off");
       el.textContent = offKind || cell || "–";
       if (offKind) { el.title = `Approved ${offKind === "PTO" ? "PTO" : "unpaid time off"} — can't be scheduled`; td.appendChild(el); tr.appendChild(td); return; }
+      const ch = cell && a.changed && a.changed[k];      // the builder sends who last set each shift; templates don't
+      if (ch) el.title = `Last changed ${clockStamp(ch.at)}${ch.by ? " by " + ch.by : ""} (Mountain time)`;
       if (o.editable) {
         el.addEventListener("click", (ev) => o.onCell(ev, a, k, cell));
         if (cell) {
