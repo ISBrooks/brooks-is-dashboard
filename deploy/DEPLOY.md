@@ -67,6 +67,27 @@ Caddy (`/etc/caddy/Caddyfile` on the droplet, not in git) serves only this site:
 it compresses responses (`encode zstd gzip`) and passes them to the app on
 127.0.0.1:8377. Backups of earlier versions sit next to it as `Caddyfile.bak-*`.
 
+## Background services (systemd)
+
+The service definitions live on the droplet in `/etc/systemd/system/` and a
+deploy never touches them:
+
+- `brooks-is-dash.service` - the web app.
+- `brooks-is-dash-sync.service` + `.timer` - the 5:00 AM sync.
+
+The two run in **different sandboxes**, so something can work from the Sync
+button (web app) and still fail at 5 AM. When that happens, compare them first:
+`systemctl cat brooks-is-dash.service brooks-is-dash-sync.service`.
+
+Add-on settings for the sync service are kept in `deploy/systemd/` as a record.
+To install one after changing it (as root on the droplet):
+
+```
+cp deploy/systemd/brooks-is-dash-sync.service.d/*.conf /etc/systemd/system/brooks-is-dash-sync.service.d/
+systemctl daemon-reload
+systemctl show brooks-is-dash-sync.service -p PrivateTmp     # expect PrivateTmp=yes
+```
+
 ## What is NOT in git (and a deploy never touches)
 
 `.env` (secrets), `data/` (the database), the Google key, `exports/`, `previews/`,
