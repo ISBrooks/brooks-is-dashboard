@@ -288,6 +288,7 @@ def api_scorecard(start_day: str = "", end_day: str = "", days: int = 30,
 
 
 @app.get("/api/inbound_split")
+@cache.cached(keep=lambda v: isinstance(v, dict))
 def api_inbound_split(start_day: str = "", end_day: str = ""):
     if not _valid_range(start_day, end_day):
         return JSONResponse({"error": "Pick a valid date range."}, status_code=400)
@@ -588,6 +589,7 @@ def api_quality(start_day: str = "", end_day: str = "", days: int = 30,
 
 
 @app.get("/api/agentview")
+@cache.cached(ttl=lambda a: None if (a.get("start_day") and a.get("end_day")) else 300)
 def api_agentview(days: int = 30, start_day: str = "", end_day: str = "") -> dict:
     """Every roster agent's full metric set over a trailing window OR a
     custom Pacific date range, plus the team aggregate."""

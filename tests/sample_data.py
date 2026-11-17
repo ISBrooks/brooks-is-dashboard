@@ -83,8 +83,24 @@ def _iso(dt: datetime) -> str:
     return dt.replace(microsecond=0).isoformat()
 
 
-def build(db_path: Path, formleads_path: Path, sourcing_master: Path) -> None:
-    """Create the dashboard DB, the sourcing app's form-lead DB and its master sheet."""
+def spend_sheet() -> dict:
+    """A made-up marketing spend sheet in the shape marketing._spend_sheet
+    returns: weekly spend per source for the 30 weeks before NOW (weeks end on
+    Saturday). Stands in for the Google sheet, which tests must not reach."""
+    rng = _Rng(SEED + 1)
+    sat = (NOW - timedelta(days=(NOW.weekday() + 2) % 7)).date()      # the last Saturday on or before NOW
+    weeks: dict[str, dict] = {}
+    names = ["Sample Search Ads", "Sample Directory", "Sample Affiliate", "Agency Fee"]
+    for i in range(30):
+        wk = (sat - timedelta(days=7 * i)).isoformat()
+        weeks[wk] = {n: {"spend": round(400 + rng.f() * 2600, 2), "sales": rng.n(0, 25),
+                         "revenue": round(rng.f() * 30000, 2), "leads": rng.n(5, 120)} for n in names}
+    return {"weeks": weeks, "tabs": ["2026 CPA"], "sources": sorted(names)}
+
+
+def build(db_path: Path, formleads_path: Path, sourcing_master: Path, sourcing_groups: Path | None = None) -> None:
+    """Create the dashboard DB, the sourcing app's form-lead DB, its master
+    sheet and (if a path is given) its source-groups file."""
     from isadash import match, store
 
     rng = _Rng(SEED)
@@ -241,6 +257,14 @@ def build(db_path: Path, formleads_path: Path, sourcing_master: Path) -> None:
 
     with sourcing_master.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["Pestroutes Source", "Provider / Channel"])
-        w.writerows([["Source 21", "Sample Search Ads"], ["Source 54", "Sample Directory"],
-                     ["Source 144", "Sample Affiliate"], ["Source 11", "Sample Organic"]])
+        w.writerow(["Pestroutes Source", "Provider / Channel", "DNIS"])
+        w.writerows([["Source 21", "Sample Search Ads", "800-555-0101"], ["Source 54", "Sample Directory", "800-555-0102"],
+                     ["Source 144", "Sample Affiliate", "800-555-0103"], ["Source 11", "Sample Organic", ""]])
+    if sourcing_groups is not None:
+        with sourcing_groups.open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["source", "provider", "group"])
+            w.writerows([["Source 21", "Sample Search Ads", "Sample Search Ads"],
+                         ["Source 54", "Sample Directory", "Sample Directory"],
+                         ["Source 144", "Sample Affiliate", "Sample Affiliate"],
+                         ["Source 11", "Sample Organic", "Sample Organic"]])

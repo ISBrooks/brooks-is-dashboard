@@ -24,6 +24,7 @@ import re
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from . import cache
 from . import hours as hours_mod
 from . import podium
 from .genesys import GenesysClient
@@ -35,7 +36,6 @@ log = logging.getLogger("isadash.mastermetric")
 MM_RELIABLE_FROM = date(2026, 9, 1)
 
 # --- Genesys --------------------------------------------------------------
-_gen_cache: dict[tuple, tuple[float, dict]] = {}
 _GEN_TTL_S = 300
 
 
@@ -45,14 +45,17 @@ def _iv(a: datetime, b: datetime) -> str:
 
 
 def genesys_by_user(settings, start: date, end: date) -> dict[str, dict]:
+    """_genesys_by_user_now, asked of Genesys at most every five minutes; an
+    older answer is handed back at once and refreshed in the background."""
+    return cache.keep_fresh(("genesys_by_user", start, end),
+                            lambda: _genesys_by_user_now(settings, start, end), _GEN_TTL_S)
+
+
+def _genesys_by_user_now(settings, start: date, end: date) -> dict[str, dict]:
     """userId -> {answered, missed, talk_ms, talk_n, acw_ms, acw_n} for whole
     Pacific days start..end inclusive. Inbound voice supplies answered /
     missed / talk; after-call work is taken across all voice interactions,
     which is how the manual report counted it."""
-    key = (start, end)
-    hit = _gen_cache.get(key)
-    if hit and time.monotonic() - hit[0] < _GEN_TTL_S:
-        return hit[1]
     out: dict[str, dict] = {}
 
     def add(uid, field, v):
@@ -91,9 +94,6 @@ def genesys_by_user(settings, start: date, end: date) -> dict[str, dict]:
                             add(uid, "talk_ms", sm); add(uid, "talk_n", n)
                         elif m == "tAcw":
                             add(uid, "acw_ms", sm); add(uid, "acw_n", n)
-    if len(_gen_cache) > 200:
-        _gen_cache.clear()
-    _gen_cache[key] = (time.monotonic(), out)
     return out
 
 
@@ -285,20 +285,21 @@ def _in_range_note(note: str, start: date, end: date) -> bool:
 
 
 # --- Genesys per agent per day (Team Overview cards) -------------------------
-_gen_daily_cache: dict[tuple, tuple[float, dict]] = {}
-
-
 def genesys_daily(settings, start: date, end: date) -> dict[str, dict[str, dict]]:
+    """_genesys_daily_now, kept for hours when the range is all in the past and
+    five minutes otherwise; an older answer is handed back at once and
+    refreshed in the background."""
+    today = datetime.now(timezone.utc).astimezone(PACIFIC).date()
+    ttl = 6 * 3600 if end < today else _GEN_TTL_S
+    return cache.keep_fresh(("genesys_daily", start, end),
+                            lambda: _genesys_daily_now(settings, start, end), ttl)
+
+
+def _genesys_daily_now(settings, start: date, end: date) -> dict[str, dict[str, dict]]:
     """userId -> {Pacific day -> {answered, missed, talk_ms, talk_n, acw_ms,
     acw_n}} for start..end inclusive, in two Genesys queries (one-day buckets),
     so any number of windows can be summed without asking Genesys again.
-    Same definitions as genesys_by_user. Past-only ranges are kept for hours."""
-    today = datetime.now(timezone.utc).astimezone(PACIFIC).date()
-    key = (start, end)
-    hit = _gen_daily_cache.get(key)
-    ttl = 6 * 3600 if end < today else _GEN_TTL_S
-    if hit and time.monotonic() - hit[0] < ttl:
-        return hit[1]
+    Same definitions as genesys_by_user."""
     out: dict[str, dict[str, dict]] = {}
 
     def add(uid, day, field, v):
@@ -340,7 +341,4 @@ def genesys_daily(settings, start: date, end: date) -> dict[str, dict[str, dict]
                             add(uid, day, "talk_ms", sm); add(uid, day, "talk_n", n)
                         elif m == "tAcw":
                             add(uid, day, "acw_ms", sm); add(uid, day, "acw_n", n)
-    if len(_gen_daily_cache) > 20:
-        _gen_daily_cache.clear()
-    _gen_daily_cache[key] = (time.monotonic(), out)
     return out

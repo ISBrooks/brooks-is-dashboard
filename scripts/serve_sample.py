@@ -5,8 +5,9 @@
 For trying a change in a browser without touching anything real: the database
 is tests/sample_data.py's invented customers, agents and calls (rebuilt in a
 temp folder on every start), there is no sign-in, the real .env is ignored and
-the outside services have placeholder credentials, so the tabs that need
-Genesys, VoiceOps or a Google sheet show their "unavailable" state.
+the outside services have placeholder credentials, so the feeds that need
+Genesys or VoiceOps show their "unavailable" state. Marketing's spend sheet is
+a made-up one (tests/sample_data.py), so Spend & ROAS works.
 """
 import os
 import re
@@ -44,10 +45,13 @@ if __name__ == "__main__":
 
     d = Path(tempfile.mkdtemp(prefix="isadash_sample_"))
     db, fl, master = d / "isadash.sqlite", d / "attribution.sqlite", d / "sourcing_master.csv"
-    sample_data.build(db, fl, master)
+    groups = d / "dispute_groups.csv"
+    sample_data.build(db, fl, master, groups)
+    from isadash import marketing
+    marketing._spend_sheet = lambda settings: sample_data.spend_sheet()     # no Google sheet locally
     # changed in place so every module holding the settings object sees it
     for _k, _v in dict(db_path=db, formleads_db=str(fl), sourcing_master=str(master),
-                       app_password="", admin_password="").items():
+                       sourcing_groups=str(groups), app_password="", admin_password="").items():
         object.__setattr__(webapp._settings, _k, _v)
     cache.configure(db)
     print(f"sample database: {db}")

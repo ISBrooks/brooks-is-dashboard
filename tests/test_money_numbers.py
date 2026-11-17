@@ -50,6 +50,13 @@ CASES = {
     "phone_weekly_monthly": lambda w: w._build_payload(),
     # Form leads
     "formleads": lambda w: w.api_formleads(),
+    # Marketing (the spend sheet is tests/sample_data.spend_sheet)
+    "spend_windows": lambda w: w.api_marketing_spend_windows(),
+    "spend_chart_ytd": lambda w: w.api_marketing_spend_chart(start_day=YTD[0], end_day=YTD[1]),
+    "spend_month": lambda w: w.api_marketing_spend(start_day=MONTH[0], end_day=MONTH[1]),
+    "volume_by_source_month": lambda w: w.api_marketing_bysource(start_day=MONTH[0], end_day=MONTH[1]),
+    "source_revenue_2026": lambda w: w.api_source_revenue(year=2026, level="channel"),
+    "source_revenue_overview": lambda w: w.api_source_revenue_overview(level="source"),
 }
 
 

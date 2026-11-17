@@ -32,6 +32,14 @@ _settings = load_settings()
 
 
 cache.configure(_settings.db_path)
+# Bookkeeping rows in app_config that are rewritten all day (every ten minutes
+# by the hours and renewal sheet imports): no saved number reads them, so a
+# write to one must not throw saved numbers away. Before this, every such write
+# rebuilt the IS #'s results. NEVER list a row here that a saved calculation
+# reads - it would not notice the change.
+cache.ignore_rows("app_config", "{row}.key NOT IN ('hours_sheet_last_import', 'renewal_pricing_last_good', "
+                  "'last_sync_started', 'last_sync_steps', 'podium_calls_since', 'podium_users_synced', "
+                  "'sync_delta_watermark') AND {row}.key NOT LIKE 'agent_tab_rollout:%'")
 
 
 # Performance log (journalctl -u brooks-is-dash | grep -E "cache:|slow:"): which
@@ -55,6 +63,15 @@ _SLOW_MS = 1000
 # from it takes several seconds, so it is re-read at most this often. A Sync
 # (manual or the morning one) always refreshes it. 0 = re-read on every change.
 _FORM_LAG_S = 900
+# The same, for numbers whose windows ended before today (Home's cards, the
+# trends, Team Overview, Spend & ROAS's complete weeks): a form lead arriving
+# today cannot move them, so they are not rebuilt for it. They still roll over
+# at midnight and follow every database change (a sync, a Settings edit).
+_FORM_SETTLED_LAG_S = 2 * 3600
+# The form-lead numbers follow a fingerprint of the sourcing app's form touches
+# (below). Its database FILE changes every few minutes for unrelated reasons,
+# so the file itself is only a backstop for a change the fingerprint can't see.
+_FORM_FILE_BACKSTOP_S = 6 * 3600
 
 
 # --- access control -------------------------------------------------------
@@ -465,15 +482,50 @@ def _auth_startup() -> None:
         conn.close()
 
 
+def _form_touch_fingerprint():
+    """A cheap fingerprint of the sourcing app's form touches: how many there
+    are, the newest, and enough about their sources to notice a re-labelling.
+    Changes when a form lead arrives or the history is cleaned up - not every
+    time the sourcing app touches its database file."""
+    import sqlite3
+
+    from ..formleads import FORM_CHANNELS
+    p = Path(_settings.formleads_db)
+    if not _settings.formleads_db or not p.exists():
+        return None
+    conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=5)
+    try:
+        return tuple(conn.execute(
+            "SELECT COUNT(*), MAX(rowid), COALESCE(SUM(LENGTH(COALESCE(source, ''))), 0), MAX(ingested_at) "
+            f"FROM touches WHERE channel IN ({','.join('?' * len(FORM_CHANNELS))})", FORM_CHANNELS).fetchone())
+    finally:
+        conn.close()
+
+
+def _settled_forms(fn):
+    """For a saved feed whose windows all ended before today: it puts up with
+    older form-lead data (_FORM_SETTLED_LAG_S) than _get_form_events itself, so
+    a form lead arriving today doesn't rebuild it. Goes UNDER @cache.cached()."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        # registered before the feed calls _get_form_events: the first registration wins
+        cache.depend_on_value("form touches", _form_touch_fingerprint, _FORM_SETTLED_LAG_S)
+        if _settings.formleads_db:
+            cache.depend_on_file(_settings.formleads_db, 4 * _FORM_FILE_BACKSTOP_S)
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 @cache.cached(copy_result=False)     # tens of thousands of events, read-only for every caller
 def _get_form_events():
     """Build + classify form-lead events. Saved until the dashboard tables it
-    reads change, or the sourcing app's database changed and the saved copy is
-    older than _FORM_LAG_S."""
+    reads change, or the sourcing app's form touches changed and the saved copy
+    is older than _FORM_LAG_S."""
     from ..formleads import (aggregate_events, build_lead_events,
                             classify_events, load_source_names)
     fl_path = Path(_settings.formleads_db)
-    cache.depend_on_file(fl_path, _FORM_LAG_S)
+    cache.depend_on_value("form touches", _form_touch_fingerprint, _FORM_LAG_S)
+    cache.depend_on_file(fl_path, _FORM_FILE_BACKSTOP_S)
     if _settings.sourcing_master:
         cache.depend_on_file(_settings.sourcing_master)
     if not fl_path.exists():
@@ -494,6 +546,7 @@ def _get_form_events():
     return events, payload
 
 
+@cache.cached()
 def _revenue_data(year: int = 0, by: str = "agent") -> dict:
     """Revenue = SUM(contract value) by SALE DATE for every OFFICE-STAFF seller
     ever (FieldRoutes employee type 0), grouped by PERSON — so departed reps
@@ -755,6 +808,9 @@ def _load_source_maps():
 
     from ..formleads import load_source_names
     group_of: dict[str, str] = {}
+    for _dep in (_settings.sourcing_groups, _settings.source_group_overrides, _settings.sourcing_master):
+        if _dep:
+            cache.depend_on_file(_dep)
 
     def _load_groups(path: str) -> None:
         p = _P(path)
@@ -794,6 +850,8 @@ def _load_source_channels() -> dict[str, str]:
     from pathlib import Path as _P
     out: dict[str, str] = {}
     for path in (_settings.source_channels, _settings.source_channel_overrides):
+        if path:
+            cache.depend_on_file(path)
         p = _P(path)
         if not path or not p.exists():
             continue

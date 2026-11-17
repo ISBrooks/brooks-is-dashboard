@@ -20,13 +20,24 @@ How it knows what a result depends on - nothing has to be declared by hand:
 * Results also roll over with the Pacific calendar day, because most windows
   are "the last N complete days".
 
+* Outside data that can't be watched that way gets a cheap fingerprint:
+  `depend_on_value()` (e.g. "how many form touches, and the newest one").
+
 Clock punches, sign-ins and the like write to tables no cached number reads, so
-they no longer throw anything away.
+they no longer throw anything away. Bookkeeping rows inside a tracked table can
+be left out too (`ignore_rows`).
+
+Data fetched from an outside service (a Google sheet, Genesys) goes through
+`keep_fresh()`: the last answer is handed back at once, and when it is older
+than its time limit it is re-fetched in the background, by one caller only.
+Nobody waits for the outside service except the very first time. A saved result
+that used such data is rebuilt when the fetched data actually changes.
 
 Only decorate functions whose inputs are the database (via `store.connect`),
-files registered with `depend_on_file`, their arguments and today's date. A
-function that calls an outside API or reads a sheet must not be cached here
-(or must be given a `ttl`).
+files registered with `depend_on_file`, fingerprints from `depend_on_value`,
+outside data read through `keep_fresh`, their arguments and today's date. A
+function that calls an outside API directly must not be cached here (or must
+be given a `ttl`).
 
 Set ISDASH_CACHE=0 in .env to switch all of this off.
 """
@@ -58,29 +69,46 @@ _not_tables: set[str] = set()          # names the authorizer reports that aren'
 _stats = {"hits": 0, "misses": 0, "uncached": 0}
 _recorders: contextvars.ContextVar[tuple] = contextvars.ContextVar(
     "isadash_cache_recorders", default=())
+_row_filters: dict[str, str] = {}      # table -> SQL condition on {row} that must hold for a write to count
+_probes: dict = {}                     # fingerprint key -> (monotonic time taken, value)
+_MAX_SOURCES = 300
+_sources: "OrderedDict[tuple, _Source]" = OrderedDict()
+_sources_lock = threading.Lock()
 
 
 class _Recorder:
     """What one in-flight calculation has read so far."""
-    __slots__ = ("tables", "files", "expires")
+    __slots__ = ("tables", "files", "values", "sources", "expires")
 
     def __init__(self) -> None:
         self.tables: set[str] = set()
         # path -> (mtime when read, seconds a change may go unnoticed, monotonic time read)
         self.files: dict[str, tuple[float | None, float, float]] = {}
+        # fingerprint key -> (fingerprint, lag seconds, monotonic time read, probe, re-check seconds)
+        self.values: dict = {}
+        # keep_fresh key -> the version of that outside data this calculation saw
+        self.sources: dict = {}
         self.expires: float | None = None      # monotonic deadline, if any input has a ttl
 
 
 class _Entry:
-    __slots__ = ("value", "tables", "files", "expires", "built", "ms")
+    __slots__ = ("value", "tables", "files", "values", "sources", "expires", "built", "ms")
 
-    def __init__(self, value, tables, files, expires, ms) -> None:
+    def __init__(self, value, tables, files, expires, ms, values=None, sources=None) -> None:
         self.value = value
         self.tables: dict[str, int] = tables
         self.files = files
+        self.values = values or {}
+        self.sources = sources or {}
         self.expires = expires
-        self.built = time.monotonic()
+        self.built = _clock()
         self.ms = ms
+
+
+def _clock() -> float:
+    """The one clock every age and time limit in this module is measured on
+    (tests replace it to make time pass)."""
+    return time.monotonic()
 
 
 def configure(db_path) -> None:
@@ -121,9 +149,152 @@ def depend_on_file(path, max_lag_s: float = 0) -> None:
     max_lag_s: how long a change to the file may go unnoticed (0 = never). Use
     it for a file that changes constantly when slightly old numbers are fine."""
     p = str(path)
-    item = (_mtime(p), float(max_lag_s), time.monotonic())
+    item = (_mtime(p), float(max_lag_s), _clock())
     for rec in _recorders.get():
         rec.files.setdefault(p, item)
+
+
+def _probe(key, probe, max_age_s: float):
+    """The fingerprint for `key`, re-taken at most every max_age_s seconds."""
+    now = _clock()
+    hit = _probes.get(key)
+    if hit and now - hit[0] < max_age_s:
+        return hit[1]
+    try:
+        value = probe()
+    except Exception:  # noqa: BLE001 - unreadable right now: counts as "changed" until it reads again
+        value = ("unreadable", now)
+    _probes[key] = (now, value)
+    return value
+
+
+def depend_on_value(key, probe, max_lag_s: float = 0, check_every_s: float = 30) -> None:
+    """Make the running calculation depend on a fingerprint of outside data:
+    `probe()` must be cheap and return something that changes when the data
+    does. Call BEFORE reading the data. max_lag_s: how long a change may go
+    unnoticed. The fingerprint is re-taken at most every check_every_s seconds.
+
+    The FIRST registration for a key wins, for files too. So a calculation that
+    can live with older data than the helper it calls (today's form leads can't
+    move a number whose window ended yesterday) registers its own, longer lag
+    before calling the helper."""
+    recs = _recorders.get()
+    if not recs:
+        return
+    item = (_probe(key, probe, 0), float(max_lag_s), _clock(), probe, float(check_every_s))
+    for rec in recs:
+        rec.values.setdefault(key, item)
+
+
+# ---- outside data: answer at once, refresh behind -------------------------
+class _Source:
+    __slots__ = ("value", "has", "at", "version", "fetch", "ttl", "busy", "retry_after", "lock", "error")
+
+    def __init__(self) -> None:
+        self.value = None
+        self.has = False
+        self.at = 0.0
+        self.version = 0
+        self.fetch = None
+        self.ttl = 0.0
+        self.busy = False
+        self.retry_after = 0.0
+        self.lock = threading.Lock()
+        self.error: Exception | None = None     # why the last first-time fetch failed
+
+
+def _store(src: _Source, value) -> None:
+    with _sources_lock:
+        try:
+            same = src.has and value == src.value
+        except Exception:  # noqa: BLE001 - can't compare: treat as new
+            same = False
+        if not same:
+            src.version += 1
+        src.value, src.has, src.at = value, True, _clock()
+
+
+def _refresh_behind(key, src: _Source) -> None:
+    """Re-fetch on a side thread; one at a time per key, and not again for a
+    minute after a failure (the old answer stays in use meanwhile)."""
+    with _sources_lock:
+        if src.busy or _clock() < src.retry_after or src.fetch is None:
+            return
+        src.busy = True
+    fetch = src.fetch
+
+    def run():
+        try:
+            _store(src, fetch())
+        except Exception as e:  # noqa: BLE001
+            src.retry_after = _clock() + 60
+            log.info("keep_fresh: refreshing %s failed (%s: %s); keeping the last answer",
+                     key[0] if isinstance(key, tuple) and key else key, type(e).__name__, str(e)[:120])
+        finally:
+            src.busy = False
+
+    threading.Thread(target=run, name="keep-fresh", daemon=True).start()
+
+
+def keep_fresh(key, fetch, ttl: float, max_stale: float | None = None):
+    """The answer of `fetch()` (a call to an outside service), without making
+    callers wait for it more than once.
+
+    * younger than `ttl` seconds: the saved answer.
+    * older than that but younger than `max_stale` (default 6 x ttl): the saved
+      answer straight away, and one background re-fetch is started.
+    * nothing saved, or older than max_stale: fetched now. Callers that arrive
+      meanwhile wait for that one fetch instead of each making their own.
+
+    A failed background re-fetch keeps the last answer; a failed first fetch
+    raises, as a direct call would - and for the next 30 seconds callers get
+    that same error at once instead of each waiting on a service that is down.
+    Inside a @cached calculation the data's version is recorded, so that
+    result is rebuilt when the data changes."""
+    if max_stale is None:
+        max_stale = 6 * ttl
+    with _sources_lock:
+        src = _sources.get(key)
+        if src is None:
+            src = _sources[key] = _Source()
+            while len(_sources) > _MAX_SOURCES:
+                _sources.popitem(last=False)
+        else:
+            _sources.move_to_end(key)
+        src.fetch, src.ttl = fetch, float(ttl)
+    if src.has:
+        age = _clock() - src.at
+        if age < max_stale:
+            if age >= ttl:
+                _refresh_behind(key, src)
+            return _saw(key, src)
+    with src.lock:
+        if not (src.has and _clock() - src.at < ttl):     # nobody fetched it while we waited
+            if src.error is not None and _clock() < src.retry_after:
+                raise src.error                           # it just failed: don't make this caller wait too
+            try:
+                _store(src, fetch())
+            except Exception as e:  # noqa: BLE001
+                src.error, src.retry_after = e, _clock() + 30
+                raise
+            src.error = None
+    return _saw(key, src)
+
+
+def _saw(key, src: _Source):
+    for rec in _recorders.get():
+        rec.sources.setdefault(key, src.version)
+    return src.value
+
+
+# ---- rows that don't count -------------------------------------------------
+def ignore_rows(table: str, condition: str) -> None:
+    """Writes to `table` only count as a change when `condition` holds, e.g.
+    "{row}.key NOT IN ('last_import_at')" ({row} becomes NEW or OLD). For
+    bookkeeping rows that are rewritten constantly and that no saved number
+    reads. If a saved calculation ever reads such a row, it will not notice it
+    changing - so only list rows that are pure bookkeeping."""
+    _row_filters[table] = condition
 
 
 # ---- table versions ------------------------------------------------------
@@ -154,17 +325,67 @@ def _track(names: list[str]) -> list[str]:
             if t not in real:
                 _not_tables.add(t)       # a view, json_each(), ... - nothing to version
                 continue
-            q = '"' + t.replace('"', '""') + '"'
-            lit = "'" + t.replace("'", "''") + "'"
             conn.execute("INSERT OR IGNORE INTO table_versions (name, v) VALUES (?, 0)", (t,))
-            for tag, event in (("i", "INSERT"), ("u", "UPDATE"), ("d", "DELETE")):
-                trig = '"' + f"tv_{tag}_{t}".replace('"', '""') + '"'
-                conn.execute(
-                    f"CREATE TRIGGER IF NOT EXISTS {trig} AFTER {event} ON {q} "
-                    f"BEGIN UPDATE table_versions SET v = v + 1 WHERE name = {lit}; END")
+            _ensure_triggers(conn, t)
             done.append(t)
         conn.commit()
         return done
+    finally:
+        conn.close()
+
+
+def _trigger_bodies(t: str) -> list[tuple[str, str]]:
+    """(trigger name, everything after the name) for the three triggers on t."""
+    q = '"' + t.replace('"', '""') + '"'
+    lit = "'" + t.replace("'", "''") + "'"
+    cond = _row_filters.get(t)
+    out = []
+    for tag, event, row in (("i", "INSERT", "NEW"), ("u", "UPDATE", "NEW"), ("d", "DELETE", "OLD")):
+        when = f" WHEN {cond.format(row=row)}" if cond else ""
+        out.append((f"tv_{tag}_{t}",
+                    f"AFTER {event} ON {q}{when} BEGIN UPDATE table_versions SET v = v + 1 WHERE name = {lit}; END"))
+    return out
+
+
+def _ensure_triggers(conn: sqlite3.Connection, t: str) -> int:
+    """Create t's triggers, or replace ones whose definition is out of date.
+    Returns how many were created or replaced."""
+    have = {r[0]: r[1] or "" for r in conn.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ?", (t,))}
+    squash = lambda sql: " ".join(sql.split())            # noqa: E731
+    changed = 0
+    for name, body in _trigger_bodies(t):
+        quoted = '"' + name.replace('"', '""') + '"'
+        old = have.get(name)
+        if old is not None:
+            if squash(old).endswith(squash(body)):
+                continue
+            conn.execute(f"DROP TRIGGER {quoted}")
+        conn.execute(f"CREATE TRIGGER {quoted} {body}")
+        changed += 1
+    return changed
+
+
+def sync_triggers() -> int:
+    """Bring the triggers of every tracked table up to date with ignore_rows
+    (run at start-up). Returns how many were replaced."""
+    if not enabled():
+        return 0
+    try:
+        conn = sqlite3.connect(_db_path, timeout=30)
+    except sqlite3.Error:
+        return 0
+    try:
+        try:
+            tables = [r[0] for r in conn.execute("SELECT name FROM table_versions")]
+        except sqlite3.Error:
+            return 0                        # tracking not set up yet
+        real = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        n = sum(_ensure_triggers(conn, t) for t in tables if t in real)
+        conn.commit()
+        if n:
+            log.info("cache: %d change-counter trigger(s) brought up to date", n)
+        return n
     finally:
         conn.close()
 
@@ -176,7 +397,7 @@ def _pacific_day() -> str:
 
 
 def _stale_reason(e: _Entry, versions: dict[str, int] | None = None) -> str | None:
-    now = time.monotonic()
+    now = _clock()
     if e.expires is not None and now >= e.expires:
         return "time limit"
     if e.tables:
@@ -185,8 +406,17 @@ def _stale_reason(e: _Entry, versions: dict[str, int] | None = None) -> str | No
         if changed:
             return "changed: " + ", ".join(changed)
     for p, (mtime, lag, since) in e.files.items():
-        if _mtime(p) != mtime and now - since >= lag:
+        if now - since >= lag and _mtime(p) != mtime:
             return "file changed: " + os.path.basename(p)
+    for key, (was, lag, since, probe, every) in e.values.items():
+        if now - since >= lag and _probe(key, probe, every) != was:
+            return f"changed: {key}"
+    for key, version in e.sources.items():
+        src = _sources.get(key)
+        if src is None or src.version != version:
+            return f"changed: {key[0] if isinstance(key, tuple) and key else key}"
+        if now - src.at >= src.ttl:
+            _refresh_behind(key, src)       # keep outside data moving while this result is in use
     return None
 
 
@@ -196,6 +426,10 @@ def _share(e: _Entry) -> None:
         rec.tables.update(e.tables)
         for p, item in e.files.items():
             rec.files.setdefault(p, item)
+        for k, item in e.values.items():
+            rec.values.setdefault(k, item)
+        for k, version in e.sources.items():
+            rec.sources.setdefault(k, version)
         if e.expires is not None:
             rec.expires = e.expires if rec.expires is None else min(rec.expires, e.expires)
 
@@ -252,6 +486,10 @@ def _build(key, label, compute, ttl, why, keep=None) -> tuple[_Entry | None, obj
         outer.tables.update(tables)
         for p, item in rec.files.items():
             outer.files.setdefault(p, item)
+        for k, item in rec.values.items():
+            outer.values.setdefault(k, item)
+        for k, version in rec.sources.items():
+            outer.sources.setdefault(k, version)
 
     untracked = sorted(t for t in tables if t not in before)
     if untracked:
@@ -270,9 +508,10 @@ def _build(key, label, compute, ttl, why, keep=None) -> tuple[_Entry | None, obj
 
     expires = rec.expires
     if ttl:
-        mine = time.monotonic() + ttl
+        mine = _clock() + ttl
         expires = mine if expires is None else min(expires, mine)
-    e = _Entry(value, {t: before[t] for t in tables if t in before}, dict(rec.files), expires, ms)
+    e = _Entry(value, {t: before[t] for t in tables if t in before}, dict(rec.files), expires, ms,
+               dict(rec.values), dict(rec.sources))
     with _entries_lock:
         _entries[key] = e
         _entries.move_to_end(key)
@@ -337,7 +576,9 @@ def clear() -> None:
 
 def stats() -> dict:
     with _entries_lock:
-        items = [(k[0], e.ms, sorted(e.tables), [os.path.basename(p) for p in e.files])
+        items = [(k[0], e.ms, sorted(e.tables),
+                  [os.path.basename(p) for p in e.files] + [str(k2) for k2 in e.values]
+                  + [str(k2[0] if isinstance(k2, tuple) and k2 else k2) for k2 in e.sources])
                  for k, e in _entries.items()]
     return {**_stats, "entries": len(items),
             "saved": [{"what": n, "build_ms": round(ms), "tables": t, "files": f}

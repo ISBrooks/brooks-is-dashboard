@@ -29,6 +29,15 @@
 400 400 /api/managers/timeoff/preview
 400 200 /api/managers/timesheet
 400 200 /api/managers/timesheet.csv
+400 200 /api/marketing/bysource
+403 403 /api/marketing/forms
+502 502 /api/marketing/forms_history
+400 502 /api/marketing/hourly
+400 200 /api/marketing/spend
+400 200 /api/marketing/spend_chart
+200 200 /api/marketing/spend_windows
+400 502 /api/marketing/volume
+502 502 /api/marketing/volume_history
 400 502 /api/mastermetric
 200 200 /api/me
 403 403 /api/me/prefs
@@ -54,6 +63,11 @@
 400 502 /api/scorecard_calls
 400 502 /api/scorecard_mm
 200 200 /api/settings
+400 400 /api/source_detail
+400 400 /api/source_dispositions
+200 200 /api/source_revenue
+200 200 /api/source_revenue_overview
+200 200 /api/sources
 200 200 /api/team_overview
 422 200 /api/teammetrics
 200 200 /api/users

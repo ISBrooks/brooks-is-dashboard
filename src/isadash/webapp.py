@@ -36,6 +36,10 @@ from .api.common import (  # noqa: F401
     _revenue_data, _roster_names, _roster_sub_rows, _scorecard_calls, _settings, _sts,
     _timeclock_startup, _token, _user, _valid_range, _validate_power, app, log,
 )
+from .api.common import (  # noqa: F401
+    _FORM_FILE_BACKSTOP_S, _FORM_SETTLED_LAG_S, _form_touch_fingerprint, _settled_forms,
+)
+from .api.team_metrics import _phone_queue_stats, _teammetrics_db  # noqa: F401
 from .api.accounts import (  # noqa: F401
     _PREFS_SCHEMA, _PREF_KEYS, _actor, _is_https, api_admin_login, api_admin_status,
     api_auth_logout, api_auth_request, api_auth_verify, api_login, api_me, api_prefs_get,
@@ -108,7 +112,9 @@ def _warm_calls() -> list:
     sends (web/app.js: loadHome, loadHomeYtd) so a visitor finds them ready."""
     from .periods import PACIFIC
     now = datetime.now(timezone.utc)
-    year = now.astimezone(PACIFIC).year
+    today = now.astimezone(PACIFIC).date()
+    year = today.year
+    period = _pay_period("current")
     return [
         (_get_form_events, {}),
         (_build_payload, {}),
@@ -120,11 +126,20 @@ def _warm_calls() -> list:
         (api_home_quality, {}),
         (api_home_servicelevel, {}),
         (_team_overview_db, {}),            # Team Metrics -> Team Overview
+        # Marketing -> Spend & ROAS: the table, and the chart's default range (this year)
+        (api_marketing_spend_windows, {}),
+        (api_marketing_spend_chart, {"start_day": f"{year}-01-01", "end_day": today.isoformat()}),
+        # Marketing -> Sales Data and Revenue -> Overview, as the page first asks for them
+        (api_source_revenue, {"year": 0, "level": "channel"}),
+        (api_revenue_overview, {"by": "agent"}),
+        # Agent Metrics -> IS #'s opens on the current pay period, through its last day
+        (api_scorecard, {"start_day": period[0].isoformat(), "end_day": period[1].isoformat(), "mode": "sold"}),
     ]
 
 
 @app.on_event("startup")
 def _cache_startup() -> None:
+    cache.sync_triggers()               # bring the change counters in line with cache.ignore_rows
     cache.start_warmer(_warm_calls)
 
 

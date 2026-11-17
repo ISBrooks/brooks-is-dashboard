@@ -11,7 +11,9 @@ from datetime import datetime, timezone
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from .. import cache
 from ..store import connect
+from .common import _settled_forms
 
 from .common import (
     _RENEWAL_SOURCES, _allowed, _channel_for, _get_form_events, _load_source_channels,
@@ -48,6 +50,7 @@ def api_marketing_forms(start_day: str = "", end_day: str = ""):
 
 
 @app.get("/api/marketing/bysource")
+@cache.cached(keep=lambda v: isinstance(v, dict))
 def api_marketing_bysource(start_day: str = "", end_day: str = ""):
     from datetime import date
 
@@ -107,7 +110,12 @@ def api_marketing_hourly(start_day: str = "", end_day: str = ""):
         return JSONResponse({"error": f"Couldn't read Genesys: {type(e).__name__}: {e}"[:300]}, status_code=502)
 
 
+# Spend & ROAS took ~5.5 s of calculation on every open. Its windows are complete
+# weeks, so it is saved until the database, the source files or the spend sheet
+# change (the sheet is re-read in the background every ten minutes).
 @app.get("/api/marketing/spend_windows")
+@cache.cached(keep=lambda v: isinstance(v, dict))
+@_settled_forms
 def api_marketing_spend_windows():
     """Marketing -> Spend & ROAS: per source, last week / trailing 4 / trailing 12."""
     from .. import marketing
@@ -127,6 +135,7 @@ def api_marketing_spend_windows():
 
 
 @app.get("/api/marketing/spend_chart")
+@cache.cached(keep=lambda v: isinstance(v, dict))
 def api_marketing_spend_chart(start_day: str = "", end_day: str = ""):
     """Marketing -> Spend & ROAS: the weekly spend / revenue / CPA % chart for
     a chosen date range (the page shows year to date until one is picked)."""
@@ -152,6 +161,7 @@ def api_marketing_spend_chart(start_day: str = "", end_day: str = ""):
 
 
 @app.get("/api/marketing/spend")
+@cache.cached(keep=lambda v: isinstance(v, dict))
 def api_marketing_spend(start_day: str = "", end_day: str = ""):
     """Marketing -> Spend & ROAS: the spend sheet's weekly spend per source
     joined to the dashboard's leads, sales and revenue by source group."""

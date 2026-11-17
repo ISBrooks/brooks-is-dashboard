@@ -20,6 +20,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from . import cache
 from .genesys import GenesysClient
 from .periods import CLOCK_TZ, PACIFIC, week_start
 from .voiceops import pacific_weeks
@@ -27,19 +28,17 @@ from .voiceops import pacific_weeks
 log = logging.getLogger("isadash.marketing")
 WEEKS = 26                      # trend length (complete Sun-Sat Pacific weeks)
 _TTL_S = 600
-_cache: dict = {}
 _lock = threading.Lock()
 
 
 def _cached(key, fn):
-    with _lock:
-        hit = _cache.get(key)
-        if hit and time.monotonic() - hit[0] < _TTL_S:
-            return hit[1]
-    val = fn()
-    with _lock:
-        _cache[key] = (time.monotonic(), val)
-    return val
+    """A sheet or Genesys answer, re-read at most every ten minutes. After ten
+    minutes the next caller still gets the last answer at once while it is
+    re-read in the background (cache.keep_fresh). Until 2026-11-17 the caller
+    waited for the re-read - and so did everyone else who asked in that moment,
+    each making their own request: the agents' clock check hit this every ten
+    minutes, four or five at a time."""
+    return cache.keep_fresh(("marketing",) + tuple(key), fn, _TTL_S)
 
 
 def _utc(d: date, end: bool = False) -> datetime:

@@ -19,8 +19,7 @@ SNAP = Path(__file__).parent / "snapshots"
 # folder, Google sheets, the sourcing app's files): what they answer depends on
 # the machine, so they are left out of the status check below.
 OUTSIDE = ("/api/software", "/api/commissions", "/api/payroll", "/api/my/payroll", "/api/my/renewal",
-           "/api/marketing", "/api/sources", "/api/source_", "/api/managers/hours", "/api/hours",
-           "/api/admin/status", "/api/sync")
+           "/api/managers/hours", "/api/hours", "/api/admin/status", "/api/sync")
 
 
 def _compare(name: str, got: str) -> None:

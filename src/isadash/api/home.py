@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from fastapi.responses import JSONResponse
 
 from .. import cache
+from .common import _settled_forms
 from ..store import connect
 
 from .common import _audit_end_utc, _get_form_events, _roster_sub_rows, _settings, _sts, app
@@ -43,6 +44,7 @@ def _phone_window_stats(conn, start_utc: str, end_utc: str) -> dict:
 
 @app.get("/api/home")
 @cache.cached()
+@_settled_forms
 def api_home() -> dict:
     """Home cards. Every window is WHOLE Pacific calendar days ending
     YESTERDAY (today is never included — no partial-day noise), and the
@@ -288,6 +290,7 @@ def api_home_servicelevel() -> dict:
 
 @app.get("/api/home_trends")
 @cache.cached()
+@_settled_forms
 def api_home_trends() -> dict:
     """13 weekly points for each home metric — the last-90-days sparklines.
     Same definitions as the home cards, bucketed into full Sunday–Saturday
@@ -354,6 +357,8 @@ def api_home_trends() -> dict:
 
 
 @app.get("/api/home_daily")
+@cache.cached()
+@_settled_forms
 def api_home_daily() -> dict:
     """Per-day breakdown for the Home metric drop-downs: the last 7 COMPLETE
     Pacific days (through yesterday). Forms: net/converted/pct by first-touch

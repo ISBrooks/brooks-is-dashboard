@@ -25,6 +25,7 @@ def api_revenue(year: int = 0) -> dict:
 
 
 @app.get("/api/source_revenue")
+@cache.cached()
 def api_source_revenue(year: int = 0, level: str = "channel") -> dict:
     """Sources tab: the Revenue tab's yearly view sliced by marketing channel
     (level=channel: Paid / Organic / Affiliate Marketing / Generic / Other, each opening
@@ -37,12 +38,14 @@ def api_source_revenue(year: int = 0, level: str = "channel") -> dict:
 
 
 @app.get("/api/source_revenue_overview")
+@cache.cached()
 def api_source_revenue_overview(level: str = "channel") -> dict:
     """Sources tab: the Revenue tab's all-time overview, by channel or source."""
     return api_revenue_overview(by="source" if level == "source" else "channel")
 
 
 @app.get("/api/revenue_overview")
+@cache.cached()
 def api_revenue_overview(by: str = "agent") -> dict:
     """All-time companion to /api/revenue, for the Revenue tab's Overview.
     by="source" groups by lead source instead (Sources tab).

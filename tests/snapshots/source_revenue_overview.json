@@ -1,0 +1,308 @@
+{
+ "agents": [
+  {
+   "agent": "Sample Search Ads",
+   "best_month": {
+    "amount": 72203.74,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 236723.26,
+    "label": "2026"
+   },
+   "total": 501939.72,
+   "years": [
+    0.0,
+    122510.49,
+    142705.97,
+    236723.26
+   ]
+  },
+  {
+   "agent": "Sample Affiliate",
+   "best_month": {
+    "amount": 54722.65,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 155116.9,
+    "label": "2026"
+   },
+   "total": 343372.54,
+   "years": [
+    0.0,
+    91907.94,
+    96347.7,
+    155116.9
+   ]
+  },
+  {
+   "agent": "Sample Directory",
+   "best_month": {
+    "amount": 46269.18,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 136409.28,
+    "label": "2026"
+   },
+   "total": 313248.14,
+   "years": [
+    0.0,
+    81851.84,
+    94987.02,
+    136409.28
+   ]
+  },
+  {
+   "agent": "Sample Organic",
+   "best_month": {
+    "amount": 39407.34,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 103726.12,
+    "label": "2026"
+   },
+   "total": 232632.65,
+   "years": [
+    0.0,
+    69810.98,
+    59095.55,
+    103726.12
+   ]
+  },
+  {
+   "agent": "(no source)",
+   "best_month": {
+    "amount": 21079.58,
+    "label": "Sep 2026"
+   },
+   "best_year": {
+    "amount": 78133.36,
+    "label": "2026"
+   },
+   "total": 158627.48,
+   "years": [
+    0.0,
+    37508.78,
+    42985.34,
+    78133.36
+   ]
+  },
+  {
+   "agent": "Mosquito upsell Campaign",
+   "best_month": {
+    "amount": 17447.56,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 56102.43,
+    "label": "2026"
+   },
+   "total": 136391.77,
+   "years": [
+    0.0,
+    38196.44,
+    42092.9,
+    56102.43
+   ]
+  },
+  {
+   "agent": "Inside Sales Renewal",
+   "best_month": {
+    "amount": 18102.05,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 54231.99,
+    "label": "2026"
+   },
+   "total": 108196.32,
+   "years": [
+    0.0,
+    32032.35,
+    21931.98,
+    54231.99
+   ]
+  },
+  {
+   "agent": "Upsell",
+   "best_month": {
+    "amount": 14567.33,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 39337.42,
+    "label": "2026"
+   },
+   "total": 81318.66,
+   "years": [
+    0.0,
+    21504.5,
+    20476.74,
+    39337.42
+   ]
+  },
+  {
+   "agent": "Bounced Check Fee",
+   "best_month": {
+    "amount": 6195.97,
+    "label": "Oct 2026"
+   },
+   "best_year": {
+    "amount": 15938.16,
+    "label": "2026"
+   },
+   "total": 29891.7,
+   "years": [
+    0.0,
+    8524.27,
+    5429.27,
+    15938.16
+   ]
+  }
+ ],
+ "by": "source",
+ "chart": {
+  "agents": [
+   {
+    "agent": "2023",
+    "months": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "total": 0.0
+   },
+   {
+    "agent": "2024",
+    "months": [
+     27260.91,
+     34334.91,
+     39778.49,
+     42136.59,
+     50657.84,
+     50706.95,
+     39684.68,
+     43920.06,
+     34949.66,
+     43805.1,
+     42351.9,
+     54260.5
+    ],
+    "total": 503847.59
+   },
+   {
+    "agent": "2025",
+    "months": [
+     34438.05,
+     39049.37,
+     59612.91,
+     44278.76,
+     31016.14,
+     42545.81,
+     37735.26,
+     41490.85,
+     35956.16,
+     49889.75,
+     51306.2,
+     58733.21
+    ],
+    "total": 526052.47
+   },
+   {
+    "agent": "2026",
+    "months": [
+     47442.65,
+     29142.19,
+     41114.36,
+     37075.0,
+     47224.25,
+     44027.98,
+     42059.26,
+     29376.42,
+     198656.47,
+     285517.69,
+     74082.65
+    ],
+    "total": 875718.92
+   }
+  ],
+  "months": [
+   "Jan",
+   "Feb",
+   "Mar",
+   "Apr",
+   "May",
+   "Jun",
+   "Jul",
+   "Aug",
+   "Sep",
+   "Oct",
+   "Nov",
+   "Dec"
+  ],
+  "year": ""
+ },
+ "hall_of_fame": {
+  "day": {
+   "agent": "Sample Search Ads",
+   "amount": 7248.74,
+   "label": "2026-10-22"
+  },
+  "month": {
+   "agent": "Sample Search Ads",
+   "amount": 72203.74,
+   "label": "Oct 2026"
+  },
+  "week": {
+   "agent": "Sample Search Ads",
+   "amount": 23167.75,
+   "label": "Sep 13 – Sep 19, 2026"
+  }
+ },
+ "mode": "overview",
+ "seller_count": 9,
+ "team_best_year": {
+  "amount": 875718.92,
+  "label": "2026"
+ },
+ "team_records": {
+  "day": {
+   "amount": 17394.83,
+   "label": "2026-10-03"
+  },
+  "month": {
+   "amount": 285517.69,
+   "label": "Oct 2026"
+  },
+  "week": {
+   "amount": 74855.46,
+   "label": "Sep 13 – Sep 19, 2026"
+  }
+ },
+ "team_total": 1905618.98,
+ "year": null,
+ "year_totals": [
+  0.0,
+  503847.59,
+  526052.47,
+  875718.92
+ ],
+ "years": [
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}

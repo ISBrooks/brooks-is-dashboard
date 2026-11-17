@@ -13,6 +13,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 
 from .. import cache
+from .common import _settled_forms
 from ..report import Bucket, aggregate, week_to_date_label
 from ..store import connect
 
@@ -128,6 +129,7 @@ def api_data(request: Request) -> Response:
 
 
 @app.get("/api/formleads")
+@cache.cached()
 def api_formleads() -> dict:
     _, payload = _get_form_events()
     # per-source economics live behind the marketing password (/api/sources);
@@ -295,6 +297,7 @@ def api_formleads_export(start_day: str = "", end_day: str = ""):
 
 
 @app.get("/api/range")
+@cache.cached()
 def api_range(start: str, end: str) -> dict:
     from ..rangestats import range_stats, utc_bounds
     conn = connect(_settings.db_path)
@@ -360,6 +363,7 @@ def api_export(dataset: str, start: str, end: str):
 
 
 @app.get("/api/leaked")
+@cache.cached(ttl=lambda a: None if (a.get("start_day") and a.get("end_day")) else 300)
 def api_leaked(days: int = 30, start_day: str = "", end_day: str = "") -> dict:
     """Leaked-leads report: callers an agent didn't pitch (marked unqualified
     or other) who bought from a different seller within 14 days."""
@@ -387,11 +391,40 @@ def api_leaked(days: int = 30, start_day: str = "", end_day: str = "") -> dict:
     return {"days": days, "summary": summary, "rows": rows}
 
 
+def _phone_queue_stats(start_day: str, end_day: str) -> dict:
+    """The Inside Sales queues' Genesys figures for a range: asked at most every
+    five minutes, and an older answer comes back at once while it is refreshed."""
+    from ..rangestats import utc_bounds
+    a, b = utc_bounds(start_day, end_day)
+
+    def fetch():
+        from ..genesys import GenesysClient
+        with GenesysClient(_settings.genesys_region, _settings.genesys_client_id,
+                           _settings.genesys_client_secret) as g:
+            return g.queue_stats(datetime.fromisoformat(a), datetime.fromisoformat(b),
+                                 _settings.genesys_queue_ids)
+    try:
+        return cache.keep_fresh(("queue_stats", start_day, end_day), fetch, 300)
+    except Exception as e:  # don't fail the whole tab if Genesys hiccups
+        return {"error": str(e)[:120]}
+
+
 @app.get("/api/teammetrics")
 def api_teammetrics(start_day: str, end_day: str, mode: str = "sold",
                     phone: bool = True) -> dict:
     """Total / Josh / Kai team metrics for a date range. Sales metrics per
-    team; form + phone-queue metrics are team-total only."""
+    team; form + phone-queue metrics are team-total only. The database part is
+    saved (_teammetrics_db); the Genesys queue figures are added on top."""
+    out = _teammetrics_db(start_day, end_day, mode)          # a private copy: safe to add to
+    if phone:
+        out["total"]["phone_metrics"] = _phone_queue_stats(start_day, end_day)
+    return out
+
+
+@cache.cached()
+def _teammetrics_db(start_day: str, end_day: str, mode: str = "sold") -> dict:
+    """Total / Josh / Kai team metrics for a date range, from the database:
+    sales metrics per team; form metrics team-total only."""
     from ..rangestats import utc_bounds
     a, b = utc_bounds(start_day, end_day)
     serviced_mode = mode == "serviced"
@@ -556,21 +589,6 @@ def api_teammetrics(start_day: str, end_day: str, mode: str = "sold",
     finally:
         conn.close()
 
-    # --- team-total only: Genesys queue stats ---
-    if not phone:                     # the overview cards skip the live Genesys call
-        out["start"] = start_day
-        out["end"] = end_day
-        return out
-    try:
-        from ..genesys import GenesysClient
-        with GenesysClient(_settings.genesys_region, _settings.genesys_client_id,
-                           _settings.genesys_client_secret) as g:
-            qs = g.queue_stats(datetime.fromisoformat(a), datetime.fromisoformat(b),
-                               _settings.genesys_queue_ids)
-        out["total"]["phone_metrics"] = qs
-    except Exception as e:  # don't fail the whole tab if Genesys hiccups
-        out["total"]["phone_metrics"] = {"error": str(e)[:120]}
-
     out["start"] = start_day
     out["end"] = end_day
     return out
@@ -586,6 +604,7 @@ _TEAM_OV_CALLS = ("calls_taken", "calls_missed", "ans_missed", "avg_talk_s", "av
 
 
 @cache.cached()
+@_settled_forms
 def _team_overview_db() -> dict:
     """The database part of Team Overview (everything except the Genesys
     call-handling cards, which api_team_overview adds per request).

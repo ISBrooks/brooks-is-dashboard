@@ -100,12 +100,16 @@ def app(tmp_path_factory, frozen_clock, no_network):
     """The web app module, pointed at a freshly built sample database."""
     d = tmp_path_factory.mktemp("isadash")
     db, fl, master = d / "isadash.sqlite", d / "attribution.sqlite", d / "sourcing_master.csv"
-    sample_data.build(db, fl, master)
+    groups = d / "dispute_groups.csv"
+    sample_data.build(db, fl, master, groups)
+    # the marketing spend sheet is a Google sheet: tests get a made-up one instead
+    from isadash import marketing
+    marketing._spend_sheet = lambda settings: sample_data.spend_sheet()
 
     # Changed in place, not replaced: every module that holds the settings object
     # (the server code is spread over several files) must see the same values.
     set_settings(webapp._settings, db_path=db, formleads_db=str(fl), sourcing_master=str(master),
-                 app_password="", admin_password="")
+                 sourcing_groups=str(groups), app_password="", admin_password="")
     cache.configure(db)
     cache.clear()
     return webapp

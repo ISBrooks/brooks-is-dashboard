@@ -134,20 +134,7 @@ def test_rolling_window_expires_but_fixed_dates_do_not(warm):
     assert limits["2026-01-01"] is None           # explicit dates: until the data changes
 
 
-def test_form_lead_file_change_is_noticed_after_the_lag(warm):
-    warm._get_form_events()
-    with cache._entries_lock:
-        entry = next(e for k, e in cache._entries.items() if k[0] == "_get_form_events")
-    path = str(warm._settings.formleads_db)
-    mtime, lag, since = entry.files[path]
-    assert lag == warm._FORM_LAG_S == 900
-    try:
-        entry.files[path] = (mtime - 1, lag, since)             # the file just changed
-        assert cache.is_fresh(warm._get_form_events)
-        entry.files[path] = (mtime - 1, lag, since - lag - 1)   # ...and the copy is past the lag
-        assert not cache.is_fresh(warm._get_form_events)
-    finally:
-        entry.files[path] = (mtime, lag, since)
+# (how form-lead changes are followed is tested in test_speed.py)
 
 
 def test_only_analytics_tables_are_tracked(warm):
