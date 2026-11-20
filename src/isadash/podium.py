@@ -55,18 +55,57 @@ def configured(settings) -> bool:
                 and settings.podium_refresh_token)
 
 
-def _token(settings) -> str:
-    if _state["token"] and time.time() < _state["exp"] - 120:
-        return _state["token"]
+class PodiumAuthError(RuntimeError):
+    """Podium refused to sign the dashboard in — e.g. the client secret was
+    regenerated in Podium's developer portal (2026-11-19: every app sharing the
+    Podium app got `401 invalid_client`), or the permission was revoked.
+    Retrying cannot fix it, so it is never retried or swallowed."""
+
+
+def _fetch_token(settings) -> dict:
+    """Ask Podium for a fresh access token. Raises PodiumAuthError when Podium
+    says no; other failures (network, 429, 5xx) stay ordinary httpx errors."""
     r = httpx.post(TOKEN_URL, data={
         "grant_type": "refresh_token", "refresh_token": settings.podium_refresh_token,
         "client_id": settings.podium_client_id, "client_secret": settings.podium_client_secret},
         timeout=30)
+    if r.status_code in (400, 401, 403):
+        try:
+            body = r.json()
+        except ValueError:
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        why = " ".join(str(body.get(k) or "") for k in ("error", "error_description")).strip()
+        raise PodiumAuthError(
+            f"Podium rejected the dashboard's sign-in (HTTP {r.status_code}"
+            + (f": {why[:120]}" if why else "") + ")")
     r.raise_for_status()
-    body = r.json()
+    return r.json()
+
+
+def _remember(body: dict) -> str:
     _state["token"] = body["access_token"]
     _state["exp"] = time.time() + int(body.get("expires_in", 3600))
     return _state["token"]
+
+
+def _token(settings) -> str:
+    if _state["token"] and time.time() < _state["exp"] - 120:
+        return _state["token"]
+    return _remember(_fetch_token(settings))
+
+
+def auth_problem(settings) -> str | None:
+    """Sign in to Podium right now, ignoring any token already held (a held
+    token keeps working for hours after the sign-in itself has been cut off).
+    None = Podium accepted it; otherwise the reason, ready to show."""
+    try:
+        _remember(_fetch_token(settings))
+    except PodiumAuthError as e:
+        return str(e)
+    except (httpx.HTTPError, KeyError, ValueError) as e:
+        return f"couldn't reach Podium to check the sign-in ({type(e).__name__})"
+    return None
 
 
 def _get(settings, path: str, params: dict, gap: float = _MIN_GAP_S) -> dict:
@@ -261,6 +300,8 @@ def collect_conversations(conn: sqlite3.Connection, settings, days: list[date], 
                     if not cur:
                         break
                     mp = {"cursor": cur}
+            except PodiumAuthError:                   # sign-in cut off mid-run: stop, keep the old data
+                raise
             except Exception:                         # one unreadable conversation never stops the run
                 skipped += 1
                 log.warning("podium conversation %s skipped", c.get("uid"), exc_info=True)

@@ -93,6 +93,17 @@ TICK_OK_MIN = 20           # a 5-minute loop is fine if it ticked within 20 min
 INGEST_OK_H = 1.5          # the sourcing 10-minute ingest
 UNMAPPED_DAYS = 30         # window for the unmapped-tracking-number check
 MCT_TICK_OK_MIN = 5        # the missed-call texter polls every 60 s
+# The Podium sync records a failed Podium lookup as "not in Podium" (its normal
+# skip), so a dead Podium sign-in looks like a healthy run with 0 errors. On
+# 2026-11-19 it wrote nothing for 28 hours and this page said OK. Normally it
+# finds ~50 customers for every one it skips; these catch the reverse.
+PODIUM_REACH_OK_H = 2      # by day it finds a customer in Podium at least this often
+PODIUM_SKIP_MIN = 20       # this many skips in 2h with under a fifth as many found = not reaching Podium
+AUTH_FAIL_RECENT_H = 0.5   # a sign-in refusal in the app's log counts while this fresh
+PODIUM_AUTH_HELP = ("Podium is rejecting this app's sign-in. If the client secret was regenerated in "
+                    "Podium's developer portal, run deploy/podium_set_secret.ps1 with the new secret.")
+_AUTH_RX = re.compile(r"oauth/token.*\b40[013]\b|\b40[013]\b.*oauth/token|invalid_client|invalid_grant",
+                      re.I | re.S)
 # hours without a new lead before a sourcing channel is suspect — the same
 # numbers the sourcing app's own hourly check uses (channel_health_check.py)
 CHANNEL_FLATLINE_H = {"genesys": 18, "gmail": 18, "meta": 30, "lsa": 36}
@@ -125,6 +136,11 @@ def _age_h(ts, now: datetime) -> float | None:
 def _worst(*verdicts: str) -> str:
     order = {"ok": 0, "idle": 0, "warn": 1, "down": 2}
     return max(verdicts, key=lambda v: order.get(v, 1)) if verdicts else "warn"
+
+
+def _is_auth_error(text) -> bool:
+    """Does this log line / stored error say Podium refused the sign-in?"""
+    return bool(text and _AUTH_RX.search(str(text)))
 
 
 def _conn(name: str, last, now: datetime, ok_h: float, note: str = "") -> dict:
@@ -292,12 +308,33 @@ def _v_podium(a: dict, now: datetime) -> dict:
     if s.get("restarts"):
         notes.append(f"{s['restarts']} automatic restart(s) since boot")
     a24 = st.get("audit_24h") or {}
-    conns = [
-        _conn("PestRoutes", st.get("hwm"), now, TICK_OK_MIN / 60, note="high-water mark"),
-        _conn("Podium", st.get("audit_last"), now, TICK_OK_MIN / 60,
-              note=f"{a24.get('update', 0)} updated · {a24.get('noop', 0)} unchanged · "
-                   f"{a24.get('create', 0)} created in 24h"),
-    ]
+    # Is anything actually reaching Podium? (see PODIUM_SKIP_MIN above)
+    rec = st.get("recent_2h") or {}
+    skipped, reached = rec.get("skipped"), rec.get("reached") or 0
+    blocked = skipped is not None and skipped >= PODIUM_SKIP_MIN and reached * 5 < skipped
+    auth_age = _age_h((a.get("auth_fail") or {}).get("ts"), now)
+    signin_cut = auth_age is not None and auth_age <= AUTH_FAIL_RECENT_H
+    if s.get("state") == "active" and (blocked or signin_cut):
+        v, head = _worst(v, "warn"), "Running, but its updates are not reaching Podium"
+        if blocked:
+            notes.insert(0, f"In the last 2 hours {skipped} customers were skipped as \"not in Podium\" and "
+                            f"only {reached} were found. Normally nearly every customer is found, so "
+                            "Podium is most likely not answering this app.")
+        if signin_cut:
+            notes.insert(0, PODIUM_AUTH_HELP)
+    if "last_reached" in st:          # agent v4+: the last time a customer was FOUND in Podium
+        skipped24 = st.get("skipped_24h") or 0
+        pod = _conn("Podium", st.get("last_reached"), now, PODIUM_REACH_OK_H,
+                    note=f"last customer found in Podium · {a24.get('update', 0)} updated · "
+                         f"{max(0, a24.get('noop', 0) - skipped24)} unchanged · {skipped24} not in Podium · "
+                         f"{a24.get('create', 0)} created in 24h")
+        if blocked or signin_cut:
+            pod["status"] = "warn"
+    else:                             # older agent: newest audit row of any kind, skips included
+        pod = _conn("Podium", st.get("audit_last"), now, TICK_OK_MIN / 60,
+                    note=f"{a24.get('update', 0)} updated · {a24.get('noop', 0)} unchanged · "
+                         f"{a24.get('create', 0)} created in 24h")
+    conns = [_conn("PestRoutes", st.get("hwm"), now, TICK_OK_MIN / 60, note="high-water mark"), pod]
     v = _worst(v, *[c["status"] for c in conns])
     la = st.get("last_alert") or {}
     return {"status": v, "headline": head, "notes": notes, "connections": conns,
@@ -468,9 +505,21 @@ def _v_mct(a: dict, now: datetime) -> dict:
         v = _worst(v, "warn")
         notes.append(f"config.yaml says {'paused' if cfg['dry_run'] else 'live'} but the running service is "
                      f"{mode} — use Restart service to apply it.")
-    if d.get("stuck_errors"):
+    # agent v4+ counts only the last 7 days, so an old incident stops flagging the card
+    recent_only = "stuck_errors_7d" in d
+    stuck = d.get("stuck_errors_7d") if recent_only else d.get("stuck_errors")
+    if stuck:
         v = _worst(v, "warn")
-        notes.append(f"{d['stuck_errors']} missed call(s) gave up after 5 tries (an alert email went out).")
+        notes.append(f"{stuck} missed call(s) {'in the last 7 days ' if recent_only else ''}gave up after "
+                     "5 tries (an alert email went out) — those callers were not texted.")
+    # the newest error says Podium refused the sign-in, and nothing has been texted since
+    le = d.get("last_error") or {}
+    le_at, sent_at = _parse(le.get("at")), _parse(d.get("last_sent"))
+    signin_cut = bool(le_at and (now - le_at) <= timedelta(hours=24) and _is_auth_error(le.get("text"))
+                      and (sent_at is None or sent_at < le_at))
+    if signin_cut:
+        v = _worst(v, "warn")
+        notes.insert(0, PODIUM_AUTH_HELP + " Until then nobody is being texted.")
     if d.get("retrying_errors"):
         notes.append(f"{d['retrying_errors']} missed call(s) hit an error and will be retried.")
     if d.get("send_problems_7d"):
@@ -499,7 +548,7 @@ def _v_mct(a: dict, now: datetime) -> dict:
              f"last customer check · {a24.get('skip-customer', 0)} customer(s) skipped in 24h"),
         soft("Podium", d.get("last_sent"), 72 if mode != "paused" else 1e9,
              f"last text sent · {a24.get('sent', 0)} in 24h, {a7.get('sent', 0)} in 7 days",
-             bad=bool(d.get("send_problems_7d"))),
+             bad=bool(d.get("send_problems_7d")) or signin_cut),
     ]
     v = _worst(v, *[c["status"] for c in conns])
     if pill is None and v == "idle":
@@ -509,7 +558,8 @@ def _v_mct(a: dict, now: datetime) -> dict:
         recent.append({"when": r.get("started_at"), "kind": _MCT_KIND.get(r.get("kind"), r.get("kind")),
                        "after_hours": bool(r.get("after_hours")), "phone": f"…{r['phone_last4']}" if r.get("phone_last4") else "",
                        "outcome": _MCT_LABEL.get(r.get("action"), r.get("action")), "action": r.get("action"),
-                       "detail": r.get("reason") or ""})
+                       "detail": r.get("reason") or ("Podium rejected the sign-in" if _is_auth_error(r.get("error"))
+                                                     else r.get("error") or "")})
     la = d.get("last_alert") or {}
     return {"status": v, "pill": pill, "headline": head, "notes": notes, "connections": conns,
             "recent": recent, "show_actions": ["mct.resume" if mode == "paused" else "mct.pause", "mct.restart"],
@@ -766,6 +816,12 @@ def live_isdash_connections(settings, now: datetime) -> list[dict]:
             conn.close()
         age = _age_h(day["collected_at"], now) if day else None
         status = "ok" if (age is not None and age <= 36) else "warn"
+        # sign in for real: stored data stays "fresh" for a day after Podium cuts the dashboard off
+        problem = podium.auth_problem(settings)
+        if problem:
+            return "warn", (day["collected_at"] if day else None), (
+                f"{problem}. If the client secret was regenerated in Podium's developer portal, run "
+                f"deploy/podium_set_secret.ps1 with the new secret. Calls mirrored through {str(calls)[:16]}.")
         return status, (day["collected_at"] if day else None), (
             f"calls mirrored through {str(calls)[:16]} · conversations collected each morning for the day before "
             f"(latest day {day['day'] if day else '—'})")

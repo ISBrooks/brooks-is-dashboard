@@ -28,7 +28,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-AGENT_VERSION = 3
+AGENT_VERSION = 4
 
 
 # ----------------------------------------------------------------- helpers ---
@@ -251,13 +251,28 @@ def app_podium() -> dict:
     s = sysd("fr-podium-sync", "ActiveState", "SubState", "ActiveEnterTimestamp", "NRestarts")
 
     def state():
+        # audit_log.ts is ISO text ('2026-11-19T17:27:24.5+00:00'), so cutoffs must be
+        # ISO too: SQLite's datetime('now',...) has a space where the 'T' is and
+        # would count the whole of yesterday as "the last 24 hours".
+        now = datetime.now(timezone.utc)
+        d1, h2 = (now - timedelta(days=1)).isoformat(), (now - timedelta(hours=2)).isoformat()
+        found = "error IS NULL AND action IN ('update','create','noop')"   # a customer FOUND in Podium
         return {"hwm": q1(db, "SELECT value FROM sync_state WHERE key = 'fr_high_water_mark'"),
                 "audit_last": q1(db, "SELECT MAX(ts) FROM audit_log"),
                 "audit_24h": dict(q(db, "SELECT action, COUNT(*) FROM audit_log "
-                                      "WHERE ts >= datetime('now','-1 day') GROUP BY action")),
+                                      "WHERE ts >= ? GROUP BY action", (d1,))),
                 # "contact not found" is the designed skip path, not a failure
-                "errors_24h": q1(db, "SELECT COUNT(*) FROM audit_log WHERE ts >= datetime('now','-1 day') "
-                                     "AND error IS NOT NULL AND error != 'skip-no-contact'"),
+                "errors_24h": q1(db, "SELECT COUNT(*) FROM audit_log WHERE ts >= ? "
+                                     "AND error IS NOT NULL AND error != 'skip-no-contact'", (d1,)),
+                # ...but a dead Podium sign-in is ALSO recorded as that skip (2026-11-19),
+                # so report found-vs-skipped and let the dashboard judge the ratio
+                "skipped_24h": q1(db, "SELECT COUNT(*) FROM audit_log WHERE ts >= ? "
+                                      "AND error = 'skip-no-contact'", (d1,)),
+                "last_reached": q1(db, f"SELECT MAX(ts) FROM audit_log WHERE {found}"),
+                "recent_2h": {
+                    "reached": q1(db, f"SELECT COUNT(*) FROM audit_log WHERE ts >= ? AND {found}", (h2,)),
+                    "skipped": q1(db, "SELECT COUNT(*) FROM audit_log WHERE ts >= ? "
+                                      "AND error = 'skip-no-contact'", (h2,))},
                 "dead_letter": q1(db, "SELECT COUNT(*) FROM dead_letter"),
                 "last_alert": (lambda r: {"category": r[0][0], "sent_at": r[0][1], "subject": r[0][2]}
                                if r else None)(
@@ -270,6 +285,8 @@ def app_podium() -> dict:
                     "restarts": int(s.get("NRestarts") or 0)},
         "state": section(state),
         "last_tick": journal_last("fr-podium-sync", r"Tick complete"),
+        # Podium refusing the sign-in (a changed client secret): newest such log line, if any
+        "auth_fail": journal_last("fr-podium-sync", r"40[013] \w+.*oauth/token|invalid_client|invalid_grant"),
     }
 
 
@@ -431,12 +448,18 @@ def app_mct() -> dict:
 
     def data():
         paused_since = (start or {}).get("ts") if mode == "paused" else None
+        def err_text(s):
+            """A stored error, short, with any phone number cut to its last 4 digits."""
+            return re.sub(r"\+?\d{6,}(\d{4})\b", r"...\1", s or "")[:200] or None
         recent = [{"started_at": r[0], "kind": r[1], "after_hours": r[2], "action": r[3],
                    "reason": (r[4] or "")[:140], "phone_last4": (r[5] or "")[-4:] or None,
-                   "location_how": r[6], "attempts": r[7], "processed_at": r[8]}
+                   "location_how": r[6], "attempts": r[7], "processed_at": r[8],
+                   "error": err_text(r[9]) if r[3] in ("error", "send-failed", "send-unknown") else None}
                   for r in q(db, "SELECT started_at, kind, after_hours, action, reason, phone, location_how, "
-                                 "attempts, processed_at FROM calls ORDER BY started_at DESC LIMIT 12")]
+                                 "attempts, processed_at, last_error FROM calls ORDER BY started_at DESC LIMIT 12")]
         last_alert = q(db, "SELECT category, sent_at FROM alerts_sent ORDER BY sent_at DESC LIMIT 1")
+        last_err = q(db, "SELECT processed_at, last_error FROM calls WHERE action = 'error' "
+                         "ORDER BY processed_at DESC LIMIT 1")
         return {
             "by_action_24h": dict(q(db, "SELECT action, COUNT(*) FROM calls WHERE processed_at >= ? GROUP BY action", (d1,))),
             "by_action_7d": dict(q(db, "SELECT action, COUNT(*) FROM calls WHERE processed_at >= ? GROUP BY action", (d7,))),
@@ -446,6 +469,11 @@ def app_mct() -> dict:
             "last_fr_check": q1(db, "SELECT MAX(processed_at) FROM calls WHERE action IN "
                                     "('sent','sending','dry-run','skip-customer','skip-opted-out','send-failed','send-unknown')"),
             "stuck_errors": q1(db, "SELECT COUNT(*) FROM calls WHERE action = 'error' AND attempts >= 5"),
+            # the card flags only recent ones, so an old incident doesn't warn forever
+            "stuck_errors_7d": q1(db, "SELECT COUNT(*) FROM calls WHERE action = 'error' AND attempts >= 5 "
+                                      "AND processed_at >= ?", (d7,)),
+            # why the newest failed call failed (e.g. Podium refusing the sign-in)
+            "last_error": {"at": last_err[0][0], "text": err_text(last_err[0][1])} if last_err else None,
             "retrying_errors": q1(db, "SELECT COUNT(*) FROM calls WHERE action = 'error' AND attempts < 5"),
             "send_problems_7d": q1(db, "SELECT COUNT(*) FROM calls WHERE action IN ('send-failed','send-unknown') "
                                        "AND processed_at >= ?", (d7,)),

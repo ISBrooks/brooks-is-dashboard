@@ -170,6 +170,11 @@ def build(conn, settings, start: date, end: date) -> dict:
             if oldest and oldest[:10] > start.isoformat():
                 notes.append(f"Podium calls are only loaded back to {oldest[:10]}, so Total Calls "
                              "Made is incomplete for this range.")
+        except podium.PodiumAuthError as e:
+            log.error("podium calls failed: %s", e)
+            calls = None
+            notes.append(f"{e}. Total Calls Made can't be read until the dashboard is reconnected "
+                         "to Podium — see Settings → Software Management.")
         except Exception as e:
             log.exception("podium calls failed")
             calls = None

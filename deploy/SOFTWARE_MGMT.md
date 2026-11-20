@@ -72,5 +72,37 @@ the new start line — the app's own documented pause. Paused = still detecting 
 recording who it WOULD text; resuming never texts those (the app's `catch-up`
 command can, from the server). `mct.restart` restarts the unit.
 
+## Podium client secret changed (2026-11-19)
+
+The dashboard, the PestRoutes → Podium sync and the Missed Call Texter all sign in
+with the SAME Podium developer app. Generating a new client secret in Podium's
+developer portal kills the old one at once; every app then gets
+`401 invalid_client` (the sync hides it as "contact not found" skips). Fix:
+`deploy/podium_set_secret.ps1` — paste the new secret once (hidden); it checks the
+secret with Podium for each app before changing anything, then swaps the
+`PODIUM_CLIENT_SECRET` line in each app's `.env` and restarts the three services.
+Anything missed while Podium was down is NOT caught up by that script.
+
+## Agent v4 — a dead Podium sign-in is visible (2026-11-20)
+
+During that outage this tab said the Podium sync was OK for 28 hours. Three causes, three fixes:
+
+- **Sync card.** The sync records a failed Podium lookup as its normal "not in Podium"
+  skip, so errors stayed 0. The agent now reports customers *found* in Podium vs skipped
+  for the last 2 hours (`recent_2h`), the last time one was found (`last_reached`),
+  `skipped_24h`, and the newest sign-in refusal in the journal (`auth_fail`).
+  `software.py` warns when ≥ 20 were skipped with under a fifth as many found
+  (normal is ~50 found per skip), or on a refusal in the last 30 minutes.
+- **24-hour counts.** `audit_log.ts` is ISO text; the old `ts >= datetime('now','-1 day')`
+  compared a `T` with a space and counted the whole of yesterday. Cutoffs are ISO now.
+- **Texter card.** "Gave up after 5 tries" counts the last 7 days only (`stuck_errors_7d`),
+  and the newest failure's text (`last_error`, phones cut to 4 digits) lets the card say
+  "Podium is rejecting this app's sign-in" until a text goes out again.
+
+The dashboard's own row ("Podium — calls & conversations") now signs in to Podium for
+real when the tab opens (`podium.auth_problem`) instead of judging by stored data, and
+`podium.py` raises `PodiumAuthError` with Podium's reason rather than "kept failing".
+`software.py` still reads a v3 agent (it falls back to the old facts).
+
 GOTCHA: the agent must have LF line endings — a CRLF shebang
 (`/usr/bin/env: 'python3'`) silently kills `status` on every box.
