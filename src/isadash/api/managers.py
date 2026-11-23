@@ -445,7 +445,7 @@ def _hours_report(start_day: str, end_day: str):
 
 @app.get("/api/managers/hours_report")
 def api_managers_hours_report(start_day: str = "", end_day: str = ""):
-    """Regular / daily OT / weekly OT / PTO hours per agent for a date range (payroll)."""
+    """Regular / weekly OT / PTO hours per agent for a date range (payroll)."""
     rep, err = _hours_report(start_day, end_day)
     return err or rep
 

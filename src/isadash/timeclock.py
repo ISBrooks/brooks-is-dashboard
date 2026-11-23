@@ -508,44 +508,39 @@ def timesheet(conn, settings, start: date, end: date, agents: list[str]) -> dict
 
 
 def _overtime(ag: dict) -> None:
-    """Daily OT = hours over 8 in a day; weekly OT = hours over 40 in a Sun–Sat
-    week. Never double counted: once a week passes 40, everything after is
-    weekly, so a long day late in the week doesn't also count as daily."""
+    """Overtime is weekly only: hours over 40 in a Sun–Sat week. The first 40
+    hours of a week are regular however long any one day ran — there is no
+    daily overtime (dropped 2026-11-23). Each day carries the part of it that
+    fell past the week's 40th hour."""
     weeks: dict[str, list] = {}
     for d in ag["days"]:
         dd = date.fromisoformat(d["date"])
         sunday = dd - timedelta(days=(dd.weekday() + 1) % 7)
         weeks.setdefault(sunday.isoformat(), []).append(d)
-    daily = weekly = 0.0
-    days_over = weeks_over = 0
+    weekly = 0.0
+    weeks_over = 0
     for days in weeks.values():
         run = 0.0
         for d in sorted(days, key=lambda x: x["date"]):
             h = d["worked_h"]
             in_window = max(0.0, min(h, 40.0 - run))          # the part of today still inside the first 40
-            d_ot = max(0.0, in_window - 8.0)
             w_ot = h - in_window
-            d["daily_ot_h"], d["weekly_ot_h"] = round(d_ot, 2), round(w_ot, 2)
-            if d_ot > 0:
-                d["flags"].append(f"daily OT {d_ot:.2f}h")
-                days_over += 1
-            daily += d_ot
+            d["weekly_ot_h"] = round(w_ot, 2)
             weekly += w_ot
             run += h
         if run > 40:
             weeks_over += 1
-    ag["daily_ot_h"], ag["weekly_ot_h"] = round(daily, 2), round(weekly, 2)
-    ag["days_over_8"], ag["weeks_over_40"] = days_over, weeks_over
-    ag["flags"] = sum(len(d["flags"]) for d in ag["days"])
+    ag["weekly_ot_h"] = round(weekly, 2)
+    ag["weeks_over_40"] = weeks_over
 
 
 # --- manager: hours report (payroll) -------------------------------------------
 def hours_report(conn, settings, start: date, end: date, agents: list[str]) -> dict:
-    """Per agent over start..end: regular hours, daily OT, weekly OT and PTO —
-    the same overtime rules as the Timesheets tab (_overtime). Overtime is
+    """Per agent over start..end: regular hours, weekly OT and PTO —
+    the same overtime rule as the Timesheets tab (_overtime). Overtime is
     worked out on whole Sun–Sat weeks, so a range that starts mid-week still
     knows how many hours came earlier that week; only days inside the range
-    are added up. Regular = worked - daily OT - weekly OT. PTO = approved PTO
+    are added up. Regular = worked - weekly OT. PTO = approved PTO
     taken on days in the range (the ledger's 'use' rows, incl. the paid part
     of a PTO + unpaid request and manager "PTO used" entries)."""
     from . import pto
@@ -555,15 +550,14 @@ def hours_report(conn, settings, start: date, end: date, agents: list[str]) -> d
     rows: dict[str, dict] = {}
     open_punches = []
     for ag in ts["agents"]:
-        r = {"agent": ag["agent"], "regular_h": 0.0, "daily_ot_h": 0.0, "weekly_ot_h": 0.0, "pto_h": 0.0, "worked_h": 0.0}
+        r = {"agent": ag["agent"], "regular_h": 0.0, "weekly_ot_h": 0.0, "pto_h": 0.0, "worked_h": 0.0}
         for d in ag["days"]:
             if not lo <= d["date"] <= hi:
                 continue
-            w, dot, wot = d["worked_h"], d.get("daily_ot_h", 0.0), d.get("weekly_ot_h", 0.0)
+            w, wot = d["worked_h"], d.get("weekly_ot_h", 0.0)
             r["worked_h"] += w
-            r["daily_ot_h"] += dot
             r["weekly_ot_h"] += wot
-            r["regular_h"] += w - dot - wot
+            r["regular_h"] += w - wot
             if "still clocked in" in d["flags"]:
                 open_punches.append({"agent": ag["agent"], "date": d["date"]})
         rows[ag["agent"]] = r
@@ -572,15 +566,15 @@ def hours_report(conn, settings, start: date, end: date, agents: list[str]) -> d
                           (lo, hi)):
         if p["agent"] not in agents or not p["h"]:
             continue
-        rows.setdefault(p["agent"], {"agent": p["agent"], "regular_h": 0.0, "daily_ot_h": 0.0, "weekly_ot_h": 0.0,
+        rows.setdefault(p["agent"], {"agent": p["agent"], "regular_h": 0.0, "weekly_ot_h": 0.0,
                                      "pto_h": 0.0, "worked_h": 0.0})["pto_h"] = p["h"]
     out = []
     for r in sorted(rows.values(), key=lambda x: x["agent"]):
-        for k in ("regular_h", "daily_ot_h", "weekly_ot_h", "pto_h", "worked_h"):
+        for k in ("regular_h", "weekly_ot_h", "pto_h", "worked_h"):
             r[k] = round(r[k] + 0.0, 2)
         if r["worked_h"] or r["pto_h"]:
             out.append(r)
-    tot = {k: round(sum(r[k] for r in out), 2) for k in ("regular_h", "daily_ot_h", "weekly_ot_h", "pto_h", "worked_h")}
+    tot = {k: round(sum(r[k] for r in out), 2) for k in ("regular_h", "weekly_ot_h", "pto_h", "worked_h")}
     return {"start": lo, "end": hi, "through": ts["through"], "agents": out, "totals": tot,
             "open_punches": open_punches, "generated_at": ts["generated_at"]}
 
@@ -590,11 +584,11 @@ def hours_report_csv(rep: dict) -> str:
     import io
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Agent", "Regular Hours", "Daily OT", "Weekly OT", "PTO"])
+    w.writerow(["Agent", "Regular Hours", "Weekly OT", "PTO"])
     for r in rep["agents"]:
-        w.writerow([r["agent"], f"{r['regular_h']:.2f}", f"{r['daily_ot_h']:.2f}", f"{r['weekly_ot_h']:.2f}", f"{r['pto_h']:.2f}"])
+        w.writerow([r["agent"], f"{r['regular_h']:.2f}", f"{r['weekly_ot_h']:.2f}", f"{r['pto_h']:.2f}"])
     t = rep["totals"]
-    w.writerow(["TOTAL", f"{t['regular_h']:.2f}", f"{t['daily_ot_h']:.2f}", f"{t['weekly_ot_h']:.2f}", f"{t['pto_h']:.2f}"])
+    w.writerow(["TOTAL", f"{t['regular_h']:.2f}", f"{t['weekly_ot_h']:.2f}", f"{t['pto_h']:.2f}"])
     return buf.getvalue()
 
 
@@ -728,18 +722,18 @@ def timesheet_csv(ts: dict) -> str:
     import io
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Agent", "Date", "Shift", "Scheduled hours", "Worked hours", "Daily OT", "Weekly OT", "Clock in", "Clock out", "Out kind", "Flags"])
+    w.writerow(["Agent", "Date", "Shift", "Scheduled hours", "Worked hours", "Weekly OT", "Clock in", "Clock out", "Out kind", "Flags"])
     for ag in ts["agents"]:
         for d in ag["days"]:
             if d["punches"]:
                 for i, p in enumerate(d["punches"]):
                     w.writerow([ag["agent"], d["date"], d["shift"] or "", d["scheduled_h"], p["hours"] or "",
-                                d.get("daily_ot_h", 0) if i == 0 else "", d.get("weekly_ot_h", 0) if i == 0 else "",
+                                d.get("weekly_ot_h", 0) if i == 0 else "",
                                 _fmt_local(p["in_at"]), _fmt_local(p["out_at"]), p["out_kind"] or "", "; ".join(d["flags"])])
             else:
-                w.writerow([ag["agent"], d["date"], d["shift"] or "", d["scheduled_h"], 0, 0, 0, "", "", "", "; ".join(d["flags"])])
-        w.writerow([ag["agent"], "TOTAL", "", ag["scheduled_h"], ag["worked_h"], ag["daily_ot_h"], ag["weekly_ot_h"], "", "", "",
-                    f"{ag['days_over_8']} days over 8h; {ag['weeks_over_40']} weeks over 40h"])
+                w.writerow([ag["agent"], d["date"], d["shift"] or "", d["scheduled_h"], 0, 0, "", "", "", "; ".join(d["flags"])])
+        w.writerow([ag["agent"], "TOTAL", "", ag["scheduled_h"], ag["worked_h"], ag["weekly_ot_h"], "", "", "",
+                    f"{ag['weeks_over_40']} weeks over 40h"])
     return buf.getvalue()
 
 

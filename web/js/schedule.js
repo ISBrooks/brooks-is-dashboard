@@ -9,7 +9,7 @@
 /* ---------- IS Managers: Timesheets + Agents ---------- */
 const TS = { data: null, range: null, open: null };
 
-/* ---------- hours report (Timesheets tab): regular / daily OT / weekly OT / PTO per agent ----------
+/* ---------- hours report (Timesheets tab): regular / weekly OT / PTO per agent ----------
    For payroll: pick dates (defaults to the last closed pay period), check it on screen, download CSV. */
 const HR = { start: null, end: null };
 
@@ -47,27 +47,27 @@ async function loadHoursReport(start, end) {
   }
   const f = (v) => (v ? v.toFixed(2) : "–");
   const t = document.createElement("table"); t.className = "tp-table hrs-rep-table";
-  t.innerHTML = `<thead><tr><th>Agent</th><th>Regular hours</th><th>Daily OT</th><th>Weekly OT</th><th>PTO</th></tr></thead>`;
+  t.innerHTML = `<thead><tr><th>Agent</th><th>Regular hours</th><th>Weekly OT</th><th>PTO</th></tr></thead>`;
   const tb = document.createElement("tbody");
   if (!d.agents.length) {
-    const tr = document.createElement("tr"); tr.innerHTML = `<td colspan="5">No hours or PTO in this range.</td>`; tb.appendChild(tr);
+    const tr = document.createElement("tr"); tr.innerHTML = `<td colspan="4">No hours or PTO in this range.</td>`; tb.appendChild(tr);
   }
   for (const r of d.agents) {
     const tr = document.createElement("tr");
     const nm = document.createElement("td"); nm.className = "nm"; nm.textContent = r.agent; tr.appendChild(nm);
-    for (const k of ["regular_h", "daily_ot_h", "weekly_ot_h", "pto_h"]) { const td = document.createElement("td"); td.textContent = f(r[k]); tr.appendChild(td); }
+    for (const k of ["regular_h", "weekly_ot_h", "pto_h"]) { const td = document.createElement("td"); td.textContent = f(r[k]); tr.appendChild(td); }
     tb.appendChild(tr);
   }
   if (d.agents.length) {
     const tr = document.createElement("tr"); tr.className = "tot";
-    tr.innerHTML = `<td class="nm">Total</td>${["regular_h", "daily_ot_h", "weekly_ot_h", "pto_h"].map((k) => `<td>${f(d.totals[k])}</td>`).join("")}`;
+    tr.innerHTML = `<td class="nm">Total</td>${["regular_h", "weekly_ot_h", "pto_h"].map((k) => `<td>${f(d.totals[k])}</td>`).join("")}`;
     tb.appendChild(tr);
   }
   t.appendChild(tb);
   box.replaceChildren(ctl, t);
   noteInto("#hr-report", "Hours worked on the time clock, per agent, for the dates picked (it opens on the last closed pay period). " +
-    "Daily OT = hours over 8 in a day; Weekly OT = hours past 40 in a Sunday–Saturday week. An hour is never counted twice: once a " +
-    "week passes 40, the rest of that week is weekly OT, not daily. Weeks are always counted from their Sunday, so a range that starts " +
+    "Weekly OT = hours past 40 in a Sunday–Saturday week; a long day on its own is not overtime. " +
+    "Weeks are always counted from their Sunday, so a range that starts " +
     "mid-week still includes the hours worked earlier that week when deciding overtime. Regular = everything else. PTO = approved PTO " +
     "taken on those days (the paid part of a PTO + unpaid request; unpaid time off isn't included). The CSV has the same columns plus a total row. " +
     "Matches the Timesheets tab for the same dates.", true);
@@ -993,19 +993,18 @@ function renderTimesheet(d) {
   const h = (v) => (v == null ? "–" : v.toFixed(2));
   const cols = [["agent", "Agent", ""], ["scheduled_h", "Scheduled", "hours on the posted schedule"],
     ["worked_h", "Clocked", "hours between clock in and out"], ["diff_h", "Difference", "clocked − scheduled"],
-    ["daily_ot_h", "Daily OT", "hours over 8 in a day (only hours inside the week's first 40)"],
-    ["weekly_ot_h", "Weekly OT", "hours past 40 in a Sun–Sat week — never also counted as daily"],
-    ["days_over_8", "Days >8h", ""], ["weeks_over_40", "Weeks >40h", ""],
-    ["flags", "Flags", "late, no clock-in, auto clock-outs, still clocked in, daily OT"]];
+    ["weekly_ot_h", "Weekly OT", "hours past 40 in a Sun–Sat week"],
+    ["weeks_over_40", "Weeks >40h", ""],
+    ["flags", "Flags", "late, no clock-in, auto clock-outs, still clocked in"]];
   const rows = d.agents.map((a) => ({ ...a, _a: a }));
-  const t = simpleTable(cols, rows, { fmt: { scheduled_h: h, worked_h: h, diff_h: (v) => (v > 0 ? "+" : "") + h(v), daily_ot_h: h, weekly_ot_h: h, flags: (v) => v || "" },
+  const t = simpleTable(cols, rows, { fmt: { scheduled_h: h, worked_h: h, diff_h: (v) => (v > 0 ? "+" : "") + h(v), weekly_ot_h: h, flags: (v) => v || "" },
     sortable: true, defaultSort: "agent", hl: new Set(["worked_h"]), onName: (r) => showTsDetail(r._a),
     flag: (r, k) => (k === "diff_h" && r.diff_h != null ? (r.diff_h < -0.5 ? "sc-red" : r.diff_h > 0.5 ? "sc-yellow" : "") : "") });
   $("#ts-table").replaceChildren(t);
   noteInto("#ts-table", `${d.start} – ${d.through}. Scheduled hours come from the posted schedule sheet; clocked hours from the ` +
     `agent's own clock in/out on their page (server time, shown in Mountain). ${!d.auto || d.auto.enabled ? `A punch still open ${d.grace_min} minutes after the scheduled shift end is closed ` +
-      `${d.auto && d.auto.stamp === "run" ? "at that moment" : "at the shift end"} and marked “auto” (see Clock rules below).` : `Auto clock-out is off (see Clock rules below).`} Overtime: daily = hours over 8 in a day, weekly = hours past 40 in a ` +
-    `Sun–Sat week; once a week passes 40 everything after counts as weekly only, so nothing is counted twice. Click an agent for their days; ` +
+      `${d.auto && d.auto.stamp === "run" ? "at that moment" : "at the shift end"} and marked “auto” (see Clock rules below).` : `Auto clock-out is off (see Clock rules below).`} Overtime is weekly only: hours past 40 in a ` +
+    `Sun–Sat week (a long day on its own is not overtime). Click an agent for their days; ` +
     `change any time directly and hit Save, add a missed punch on the empty line, ✕ deletes one. Every change is logged; the note is optional.`, true);
   if (TS.open) { const a = d.agents.find((x) => x.agent === TS.open); if (a) showTsDetail(a); }
 }
