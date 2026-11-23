@@ -16,7 +16,7 @@ from ..store import connect
 
 from .common import (
     _allowed, _comm_db, _comm_reports_dir, _is_pre_go_live, _live_from, _lookup_why,
-    _payroll_periods, _settings, _user, app,
+    _payroll_periods, _roster_names, _settings, _user, app,
 )
 
 
@@ -261,38 +261,68 @@ def _sheet_fill(ws, header: list, rows: list, money_cols: tuple = (),
     ws.freeze_panes = ws.cell(row=2, column=1).coordinate
 
 
-def _week_summary(ws, reps, pos, neg, wpos, wneg, labels, managers=()) -> None:
+def _week_summary(ws, reps, pos, neg, wpos, wneg, labels, managers=(), hours=None) -> None:
     """Summary with each week's commissions / deductions / total per rep, then
-    the pay period (commissions RULES §7 weekly split). Managers (RULES §14,
-    flat 5%) get their own block under the inside-sales TOTAL, then a payroll
-    total of both."""
+    the pay period (commissions RULES §7 weekly split). With `hours`
+    ({1: {name: (regular, overtime, pto)}, 2: {...}}; Dallin 2026-11-23) each
+    week and the period also carry the rep's hours worked, overtime hours and
+    PTO hours from the time clock; someone the clock has nothing for (salaried)
+    shows blanks. Managers (RULES §14, flat 5%) get their own block under the
+    inside-sales TOTAL, then a payroll total of both."""
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
     HDR = Font(name="Arial", size=10, bold=True, color="FFFFFF")
     FILL = PatternFill("solid", fgColor="1F3864")
     MONEY = '$#,##0.00;($#,##0.00);"-"'
-    ws.append(["", labels[0], "", "", labels[1], "", "", labels[2], "", ""])
-    for a, b in (("B1", "D1"), ("E1", "G1"), ("H1", "J1")):
-        ws.merge_cells(f"{a}:{b}")
-    ws.append(["Rep", "Commissions", "Deductions", "Total", "Commissions", "Deductions",
-               "Total", "Commissions", "Deductions", "Net"])
+    HOURS = '0.00;-0.00;"-"'
+    with_h = hours is not None
+    per = 6 if with_h else 3                      # columns per group
+    heads = ["Commissions", "Deductions", "Total"] + (
+        ["Hours", "OT Hours", "PTO Hours"] if with_h else [])
+    ncol = 1 + 3 * per
+    row1 = [""]
+    for lab in labels:
+        row1 += [lab] + [""] * (per - 1)
+    ws.append(row1)
+    for g in range(3):
+        a, b = get_column_letter(2 + g * per), get_column_letter(1 + (g + 1) * per)
+        ws.merge_cells(f"{a}1:{b}1")
+    ws.append(["Rep"] + heads + heads + heads[:2] + ["Net"] + heads[3:])
     for row in (1, 2):
-        for c in range(1, 11):
+        for c in range(1, ncol + 1):
             cell = ws.cell(row=row, column=c)
             cell.font, cell.fill = HDR, FILL
             if row == 1:
                 cell.alignment = Alignment(horizontal="center")
     R = lambda v: round(v, 2)  # noqa: E731
     BOLD = Font(name="Arial", size=10, bold=True)
+    hour_cols = set()
+    if with_h:
+        for g in range(3):
+            hour_cols |= {2 + g * per + 3, 2 + g * per + 4, 2 + g * per + 5}
+
+    def hrs(rep, k):
+        """(regular, overtime, pto) for week k, or None when the clock has nothing."""
+        return (hours or {}).get(k, {}).get(rep)
 
     def block(names, label):
-        tot = [0.0] * 9
+        tot = [0.0] * (3 * per)
         for rep in names:
             p1, n1 = R(wpos[1].get(rep, 0)), R(wneg[1].get(rep, 0))
             p2, n2 = R(wpos[2].get(rep, 0)), R(wneg[2].get(rep, 0))
             p, n = R(pos.get(rep, 0)), R(neg.get(rep, 0))
-            vals = [p1, n1, R(p1 + n1), p2, n2, R(p2 + n2), p, n, R(p + n)]
-            tot = [a + b for a, b in zip(tot, vals)]
+            h1, h2 = hrs(rep, 1), hrs(rep, 2)
+            vals = [p1, n1, R(p1 + n1)]
+            if with_h:
+                vals += list(h1) if h1 else [None] * 3
+            vals += [p2, n2, R(p2 + n2)]
+            if with_h:
+                vals += list(h2) if h2 else [None] * 3
+            vals += [p, n, R(p + n)]
+            if with_h:
+                vals += ([R(x + y) for x, y in zip(h1 or (0, 0, 0), h2 or (0, 0, 0))]
+                         if (h1 or h2) else [None] * 3)
+            tot = [x + (y or 0.0) for x, y in zip(tot, vals)]
             ws.append([rep] + vals)
         ws.append([label] + [R(v) for v in tot])
         for cell in ws[ws.max_row]:
@@ -304,21 +334,47 @@ def _week_summary(ws, reps, pos, neg, wpos, wneg, labels, managers=()) -> None:
         ws.append([])
         ws.append(["Managers — flat 5% once the first service is done and paid, "
                    "never deducted"])
-        for c in range(1, 11):
+        for c in range(1, ncol + 1):
             cell = ws.cell(row=ws.max_row, column=c)
             cell.font, cell.fill = HDR, FILL
         mgr_tot = block(managers, "MANAGERS TOTAL")
         ws.append([])
         ws.append(["PAYROLL TOTAL (inside sales + managers)"]
-                  + [R(a + b) for a, b in zip(isa_tot, mgr_tot)])
+                  + [R(x + y) for x, y in zip(isa_tot, mgr_tot)])
         for cell in ws[ws.max_row]:
             cell.font = BOLD
     for row in ws.iter_rows(min_row=3):
         for cell in row[1:]:
-            cell.number_format = MONEY
-    for c in range(1, 11):
-        ws.column_dimensions[get_column_letter(c)].width = 22 if c == 1 else 13
+            cell.number_format = HOURS if cell.column in hour_cols else MONEY
+    for c in range(1, ncol + 1):
+        ws.column_dimensions[get_column_letter(c)].width = (
+            22 if c == 1 else 11 if c in hour_cols else 13)
     ws.freeze_panes = "B3"
+
+
+def _hours_by_week(wk_dates) -> tuple[dict, str | None]:
+    """Hours for the payroll workbook (Dallin 2026-11-23): per Sun-Sat week,
+    {name: (regular hours, overtime hours, PTO hours)} from the dashboard time
+    clock - the same numbers as Managers -> Hours report (weekly overtime over
+    40, PTO taken on days in the week). Best effort: if the clock cannot be
+    read the workbook still builds, with a note on the Summary."""
+    from .. import timeclock
+    out: dict[int, dict] = {1: {}, 2: {}}
+    try:
+        conn = connect(_settings.db_path)
+        try:
+            names = _roster_names(conn)
+            for k, (a, b) in zip((1, 2), wk_dates):
+                rep = timeclock.hours_report(conn, _settings, a, b, names)
+                out[k] = {r["agent"]: (round(r["regular_h"], 2), round(r["weekly_ot_h"], 2),
+                                       round(r["pto_h"], 2)) for r in rep["agents"]}
+        finally:
+            conn.close()
+    except Exception as e:  # noqa: BLE001 - the money columns must still go out
+        logging.getLogger("isadash.commissions").warning("payroll workbook hours: %s", e)
+        return out, (f"Hours could not be read from the time clock ({e}); "
+                     "the money columns are complete.")
+    return out, None
 
 
 @app.get("/api/commissions/reports")
@@ -415,16 +471,24 @@ def api_commissions_report_xlsx(period: str):
     wk_i = hdr.index("Week") if "Week" in hdr else None
     wpos = {1: defaultdict(float), 2: defaultdict(float)}
     wneg = {1: defaultdict(float), 2: defaultdict(float)}
+    hours: dict[int, dict] = {1: {}, 2: {}}
     if wk_i is not None:
         for rows, acc in ((comm_rows, wpos), (ded_rows, wneg)):
             for r in rows:
                 acc[1 if str(r[wk_i]) == "1" else 2][r[0]] += float(r[4])
-        _week_summary(summary, sorted((set(pos) | set(neg)) - managers), pos, neg,
+        # hours worked / overtime / PTO per week for every hourly rep (Dallin
+        # 2026-11-23): a rep with hours but no commission lines is listed too
+        hours, hours_note = _hours_by_week(wk_dates)
+        clocked = {n for k in (1, 2) for n in hours[k]}
+        _week_summary(summary, sorted((set(pos) | set(neg) | clocked) - managers), pos, neg,
                       wpos, wneg,
                       [f"Week 1 · Sun {md(wk_dates[0][0])} – Sat {md(wk_dates[0][1])}",
                        f"Week 2 · Sun {md(wk_dates[1][0])} – Sat {md(wk_dates[1][1])}",
                        f"Pay period · {md(start)} – {md(end)}"],
-                      managers=sorted(managers))
+                      managers=sorted(managers), hours=hours)
+        if hours_note:
+            summary.append([])
+            summary.append([hours_note])
     else:                                    # a statement from before the weekly split
         srows, tp, tn = [], 0.0, 0.0
         for rep in sorted(set(pos) | set(neg)):
@@ -480,11 +544,15 @@ def api_commissions_report_xlsx(period: str):
                    f"{len(mine_c)} commissions ${pos.get(rep, 0):,.2f}, "
                    f"{len(mine_d)} deductions ${neg.get(rep, 0):,.2f}, net ${net:,.2f}"])
         if wk_i is not None:
-            ws.append([" · ".join(
-                f"week {k} ({md(a)}–{md(b)}): commissions ${wpos[k].get(rep, 0):,.2f}, "
-                f"deductions ${wneg[k].get(rep, 0):,.2f}, "
-                f"total ${wpos[k].get(rep, 0) + wneg[k].get(rep, 0):,.2f}"
-                for k, (a, b) in zip((1, 2), wk_dates))])
+            def _wk(k, a, b):
+                s = (f"week {k} ({md(a)}–{md(b)}): commissions ${wpos[k].get(rep, 0):,.2f}, "
+                     f"deductions ${wneg[k].get(rep, 0):,.2f}, "
+                     f"total ${wpos[k].get(rep, 0) + wneg[k].get(rep, 0):,.2f}")
+                h = hours.get(k, {}).get(rep)
+                if h:
+                    s += f"; hours {h[0]:.2f}, OT {h[1]:.2f}, PTO {h[2]:.2f}"
+                return s
+            ws.append([" · ".join(_wk(k, a, b) for k, (a, b) in zip((1, 2), wk_dates))])
         ws.append([])
         _sheet_fill(ws, hdr, mine_c + ([[]] if mine_d else []) + mine_d,
                     money_cols=(5,), widths={1: 20, 2: 12, 3: 11, 4: 24, 5: 10, 21: 50})
