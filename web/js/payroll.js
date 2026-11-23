@@ -375,6 +375,7 @@ async function loadRunCard() {
     const [ny, nm, nd] = d.next_period_end.split("-").map(Number);
     const unlock = new Date(ny, nm - 1, nd + 1);
     state.textContent = `ran ${d.ran_at}` + (run.totals ? ` · ${run.totals}` : "") +
+      (run.week_totals ? ` · ${run.week_totals}` : "") +
       ` — later changes land in the next payroll (unlocks Sun ${unlock.getMonth() + 1}/${unlock.getDate()})`;
   } else {
     // already run: grey until the next period closes, allow a re-run
@@ -385,6 +386,7 @@ async function loadRunCard() {
     const unlock = new Date(ny, nm - 1, nd + 1);   // the Sunday after the Saturday close
     state.textContent = `ran ${d.ran_at}` +
       (run.totals ? ` · ${run.totals}` : "") +
+      (run.week_totals ? ` · ${run.week_totals}` : "") +
       ` — next payroll unlocks Sun ${unlock.getMonth() + 1}/${unlock.getDate()}`;
   }
   if (!btn.dataset.bound) {

@@ -194,15 +194,16 @@ def _mark_pre_go_live(wb) -> None:
     for a statement that was paid: red banner over the Summary, red tabs,
     and the workbook title."""
     from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
     ws = wb["Summary"]
     ws.insert_rows(1)
-    ws.merge_cells("A1:D1")
+    ws.merge_cells(f"A1:{get_column_letter(max(ws.max_column, 4))}1")
     ws["A1"] = PRE_GO_LIVE_BANNER
     ws["A1"].font = Font(name="Arial", size=11, bold=True, color="9C0006")
     ws["A1"].fill = PatternFill("solid", fgColor="FFC7CE")
     ws["A1"].alignment = Alignment(wrap_text=True, vertical="center")
     ws.row_dimensions[1].height = 30
-    ws.freeze_panes = "A3"
+    ws.freeze_panes = "A4" if ws.max_column > 4 else "A3"   # two header rows when split by week
     for sh in wb.worksheets:
         sh.sheet_properties.tabColor = "C00000"
     wb.properties.title = PRE_GO_LIVE_BANNER
@@ -247,6 +248,45 @@ def _sheet_fill(ws, header: list, rows: list, money_cols: tuple = (),
     for c, w in (widths or {}).items():
         ws.column_dimensions[get_column_letter(c)].width = w
     ws.freeze_panes = ws.cell(row=2, column=1).coordinate
+
+
+def _week_summary(ws, reps, pos, neg, wpos, wneg, labels) -> None:
+    """Summary with each week's commissions / deductions / total per rep, then
+    the pay period (commissions RULES §7 weekly split)."""
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    HDR = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    FILL = PatternFill("solid", fgColor="1F3864")
+    MONEY = '$#,##0.00;($#,##0.00);"-"'
+    ws.append(["", labels[0], "", "", labels[1], "", "", labels[2], "", ""])
+    for a, b in (("B1", "D1"), ("E1", "G1"), ("H1", "J1")):
+        ws.merge_cells(f"{a}:{b}")
+    ws.append(["Rep", "Commissions", "Deductions", "Total", "Commissions", "Deductions",
+               "Total", "Commissions", "Deductions", "Net"])
+    for row in (1, 2):
+        for c in range(1, 11):
+            cell = ws.cell(row=row, column=c)
+            cell.font, cell.fill = HDR, FILL
+            if row == 1:
+                cell.alignment = Alignment(horizontal="center")
+    R = lambda v: round(v, 2)  # noqa: E731
+    tot = [0.0] * 9
+    for rep in reps:
+        p1, n1 = R(wpos[1].get(rep, 0)), R(wneg[1].get(rep, 0))
+        p2, n2 = R(wpos[2].get(rep, 0)), R(wneg[2].get(rep, 0))
+        p, n = R(pos.get(rep, 0)), R(neg.get(rep, 0))
+        vals = [p1, n1, R(p1 + n1), p2, n2, R(p2 + n2), p, n, R(p + n)]
+        tot = [a + b for a, b in zip(tot, vals)]
+        ws.append([rep] + vals)
+    ws.append(["TOTAL"] + [R(v) for v in tot])
+    for row in ws.iter_rows(min_row=3):
+        for cell in row[1:]:
+            cell.number_format = MONEY
+    for cell in ws[ws.max_row]:
+        cell.font = Font(name="Arial", size=10, bold=True)
+    for c in range(1, 11):
+        ws.column_dimensions[get_column_letter(c)].width = 22 if c == 1 else 13
+    ws.freeze_panes = "B3"
 
 
 @app.get("/api/commissions/reports")
@@ -318,14 +358,32 @@ def api_commissions_report_xlsx(period: str):
         pos[r[0]] += float(r[4])
     for r in ded_rows:
         neg[r[0]] += float(r[4])
-    srows, tp, tn = [], 0.0, 0.0
-    for rep in sorted(set(pos) | set(neg)):
-        p, n = round(pos.get(rep, 0), 2), round(neg.get(rep, 0), 2)
-        tp += p; tn += n
-        srows.append([rep, p, n, round(p + n, 2)])
-    srows.append(["TOTAL", round(tp, 2), round(tn, 2), round(tp + tn, 2)])
-    _sheet_fill(summary, ["Rep", "Commissions", "Deductions", "Net"], srows,
-                money_cols=(2, 3, 4), widths={1: 22, 2: 13, 3: 13, 4: 13})
+    # weekly split (commissions RULES §7): the statement's Week column places
+    # every line in week 1 or week 2 of the period by the event it settles
+    end = _date.fromisoformat(period)
+    start = end - _td(days=13)
+    md = lambda d: f"{d.month}/{d.day}"  # noqa: E731
+    wk_dates = [(start, start + _td(days=6)), (start + _td(days=7), end)]
+    wk_i = hdr.index("Week") if "Week" in hdr else None
+    wpos = {1: defaultdict(float), 2: defaultdict(float)}
+    wneg = {1: defaultdict(float), 2: defaultdict(float)}
+    if wk_i is not None:
+        for rows, acc in ((comm_rows, wpos), (ded_rows, wneg)):
+            for r in rows:
+                acc[1 if str(r[wk_i]) == "1" else 2][r[0]] += float(r[4])
+        _week_summary(summary, sorted(set(pos) | set(neg)), pos, neg, wpos, wneg,
+                      [f"Week 1 · Sun {md(wk_dates[0][0])} – Sat {md(wk_dates[0][1])}",
+                       f"Week 2 · Sun {md(wk_dates[1][0])} – Sat {md(wk_dates[1][1])}",
+                       f"Pay period · {md(start)} – {md(end)}"])
+    else:                                    # a statement from before the weekly split
+        srows, tp, tn = [], 0.0, 0.0
+        for rep in sorted(set(pos) | set(neg)):
+            p, n = round(pos.get(rep, 0), 2), round(neg.get(rep, 0), 2)
+            tp += p; tn += n
+            srows.append([rep, p, n, round(p + n, 2)])
+        srows.append(["TOTAL", round(tp, 2), round(tn, 2), round(tp + tn, 2)])
+        _sheet_fill(summary, ["Rep", "Commissions", "Deductions", "Net"], srows,
+                    money_cols=(2, 3, 4), widths={1: 22, 2: 13, 3: 13, 4: 13})
 
     _sheet_fill(wb.create_sheet("Commissions"), hdr, comm_rows, money_cols=(5,),
                 widths={1: 20, 2: 12, 3: 11, 4: 24, 5: 10, 21: 50})
@@ -333,8 +391,6 @@ def api_commissions_report_xlsx(period: str):
                 widths={1: 20, 2: 12, 3: 11, 4: 24, 5: 10, 21: 50})
 
     # tech-referral upsells credited this period, for the branch managers
-    end = _date.fromisoformat(period)
-    start = end - _td(days=13)
     tech = []
     conn = _comm_db()
     if conn:
@@ -372,6 +428,12 @@ def api_commissions_report_xlsx(period: str):
                    f"{rep} — {period} payroll: "
                    f"{len(mine_c)} commissions ${pos.get(rep, 0):,.2f}, "
                    f"{len(mine_d)} deductions ${neg.get(rep, 0):,.2f}, net ${net:,.2f}"])
+        if wk_i is not None:
+            ws.append([" · ".join(
+                f"week {k} ({md(a)}–{md(b)}): commissions ${wpos[k].get(rep, 0):,.2f}, "
+                f"deductions ${wneg[k].get(rep, 0):,.2f}, "
+                f"total ${wpos[k].get(rep, 0) + wneg[k].get(rep, 0):,.2f}"
+                for k, (a, b) in zip((1, 2), wk_dates))])
         ws.append([])
         _sheet_fill(ws, hdr, mine_c + ([[]] if mine_d else []) + mine_d,
                     money_cols=(5,), widths={1: 20, 2: 12, 3: 11, 4: 24, 5: 10, 21: 50})
