@@ -1125,8 +1125,8 @@ async function loadHr() {
   table.appendChild(tb); wrap.appendChild(table);
   box.replaceChildren(wrap);
   noteInto("#hr-table", "Start date, employment type and hours drive PTO (policy 4-09): accrual starts 180 days after the start date, " +
-    "2 h per 80 worked for under two years of service and 3 per 80 after, full time = 30+ h/week (the Employment field overrides the " +
-    "8-week average when set). The 80 h cap starts Jan 1, 2027: balances above 80 on Dec 31 are cut to 80 that day, then accrual stops at 80; until then nobody is capped. Only hours actually worked earn PTO — the time clock from Oct 26, 2026 (a fixed punch re-figures that day); scheduled hours never do. " +
+    "1 h per 40 worked for under two years of service and 1.5 per 40 after, full time = 30+ h/week (the Employment field overrides the " +
+    "8-week average when set). The 80 h cap starts Jan 1, 2027: balances above 80 on Dec 31 are cut to 80 that day, then accrual stops at 80; until then nobody is capped. Only hours actually worked earn PTO — the time clock from Oct 26, 2026 (a fixed punch re-figures that day); scheduled hours never do. From the week of Nov 22, 2026, at most 40 worked hours a week (Sun–Sat, the overtime week) earn PTO — no PTO on overtime; earlier weeks are left as they were. " +
     "Balances were set from Homebase as of Oct 25, 2026. Adjust adds or removes hours with a note; Ledger shows every entry.", true);
 }
 

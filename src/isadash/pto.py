@@ -1,8 +1,9 @@
 """PTO balances and accrual (Brooks policy 4-09, docs/TIMESHEET_PLAN.md).
 
 Rules, as encoded:
-  * accrual = hours worked x rate; rate = 2/80 for under two years of service,
-    3/80 from the second anniversary (years from agent_hr.start_date)
+  * accrual = hours worked x rate; rate = 2/80 (1 per 40) for under two years
+    of service, 3/80 (1.5 per 40) from the second anniversary (years from
+    agent_hr.start_date)
   * hours worked = hours actually worked: the Homebase upload through
     2026-10-25, then the dashboard time clock (agent_hours source 'clock').
     The frozen SCHEDULE rows (before 2026-10-05) never earn PTO
@@ -14,6 +15,11 @@ Rules, as encoded:
     80 by one 'cap:2027' ledger row, kept correct if December hours or edits
     arrive later. From then on accrual stops at 80 and resumes when PTO is
     used; carry-over needs no action
+  * at most 40 worked hours a week earn PTO (WEEKLY_CAP_HOURS; Dallin,
+    2026-11-23): overtime never earns PTO. Weeks run Sunday-Saturday, the
+    same week overtime uses; the first 40 hours of the week earn, anything
+    after does not. Applies from the week of Sunday 2026-11-22
+    (WEEKLY_CAP_FROM) on; days before it are never re-figured
   * full-time test: agent_hr.employment_type when set, else an average of 30+
     hours a week over the trailing eight weeks of agent_hours
 
@@ -33,6 +39,8 @@ CAP_HOURS = 80.0
 CAP_EFFECTIVE = date(2027, 1, 1)   # the cap applies from here; balances above 80 are cut to 80 that day
 RATE_UNDER_2Y = 2 / 80
 RATE_2Y_PLUS = 3 / 80
+WEEKLY_CAP_HOURS = 40.0           # only the first 40 worked hours of a Sun-Sat week earn PTO (no PTO on overtime)
+WEEKLY_CAP_FROM = date(2026, 11, 22)   # a Sunday: the cap applies to this week and after, never to earlier days
 FULL_TIME_WEEKLY = 30.0            # the policy's definition of full time...
 FULL_TIME_TEST_WEEKLY = 28.0       # ...tested with two hours of grace, so being let off early doesn't flip anyone
 
@@ -106,6 +114,20 @@ def is_full_time(conn, agent: str, on: date, hr: dict | None = None) -> tuple[bo
 CLOCK_RECALC_DAYS = 60     # time-clock days this far back are re-checked each run (a manager may fix a punch)
 
 
+def week_sunday(d: date) -> date:
+    """The Sunday that starts d's Sun-Sat week (the overtime week)."""
+    return d - timedelta(days=(d.weekday() + 1) % 7)
+
+
+def earning_hours(d: date, worked: float, earlier_in_week: float) -> float:
+    """The part of a day's worked hours that earns PTO: from WEEKLY_CAP_FROM,
+    only what still fits inside the week's first 40 hours (the same split the
+    overtime rule makes, so overtime hours never earn). Before then, all of it."""
+    if d < WEEKLY_CAP_FROM:
+        return worked
+    return max(0.0, min(worked, WEEKLY_CAP_HOURS - earlier_in_week))
+
+
 def accrue(conn, agents: list[str], through: date | None = None, since: date | None = None) -> dict:
     """Bring accrual rows up to date, honouring probation and the cap. Only
     hours actually WORKED earn PTO: Homebase hours through Oct 25, 2026, then
@@ -166,6 +188,11 @@ def accrue(conn, agents: list[str], through: date | None = None, since: date | N
             worked = {r["day"]: r["hours"] for r in conn.execute(
                 "SELECT day, hours FROM agent_hours WHERE agent = ? AND source = 'clock' AND day >= ? AND day <= ? AND hours > 0",
                 (agent, c_lo.isoformat(), clock_last.isoformat()))}
+            # every clock day of the weeks touched, so a day knows what came earlier
+            # in its Sun-Sat week even when that falls before the recalculation window
+            wk = {r["day"]: r["hours"] for r in conn.execute(
+                "SELECT day, hours FROM agent_hours WHERE agent = ? AND source = 'clock' AND day >= ? AND day <= ? AND hours > 0",
+                (agent, week_sunday(c_lo).isoformat(), clock_last.isoformat()))}
             booked = {r["day"]: (r["id"], r["hours"]) for r in conn.execute(
                 "SELECT id, day, hours FROM pto_ledger WHERE agent = ? AND kind = 'accrual' AND day >= ? AND day <= ?",
                 (agent, c_lo.isoformat(), clock_last.isoformat()))}
@@ -175,8 +202,11 @@ def accrue(conn, agents: list[str], through: date | None = None, since: date | N
                     h = worked.get(iso, 0.0)
                     old_id, old = booked.get(iso, (None, 0.0))
                     earn = 0.0
-                    if h > 0 and is_full_time(conn, agent, d, hr)[0]:
-                        earn = round(h * rate_for(start, d), 4)
+                    sun = week_sunday(d).isoformat()
+                    before = sum(v for k, v in wk.items() if sun <= k < iso)
+                    counted = earning_hours(d, h, before)
+                    if counted > 0 and is_full_time(conn, agent, d, hr)[0]:
+                        earn = round(counted * rate_for(start, d), 4)
                         if d >= CAP_EFFECTIVE:
                             if not cut_checked:
                                 _settle_cut(conn, agent)
@@ -186,6 +216,9 @@ def accrue(conn, agents: list[str], through: date | None = None, since: date | N
                     if abs(earn - old) < 0.00005:
                         continue
                     note = f"{h:g} h worked (time clock) x {rate_for(start, d) * 80:g}/80"
+                    if counted < h - 0.00005:
+                        note = (f"{counted:g} of {h:g} h worked (time clock) x {rate_for(start, d) * 80:g}/80"
+                                f" - only the first {WEEKLY_CAP_HOURS:g} h of the week earn PTO")
                     if old_id and earn > 0:
                         conn.execute("UPDATE pto_ledger SET hours = ?, note = ?, created_at = ? WHERE id = ?", (earn, note, _now(), old_id))
                     elif old_id:
@@ -255,9 +288,9 @@ def summary(conn, agent: str, on: date | None = None) -> dict:
         status, detail = "at cap", "At the 80-hour cap — accrual resumes when some PTO is used."
     elif bal >= CAP_HOURS:
         status, detail = "accruing", (f"Above 80 h — still accruing until Jan 1, 2027, when balances are cut to 80 and the cap applies. "
-                                      f"Earning {rate_for(start, on) * 80:g} hours per 80 worked.")
+                                      f"Earning {rate_for(start, on) * 40:g} hours per 40 worked (up to 40 hours a week; overtime doesn't earn PTO).")
     else:
-        status, detail = "accruing", f"Earning {rate_for(start, on) * 80:g} hours per 80 worked ({years_of_service(start, on):.1f} years of service)."
+        status, detail = "accruing", f"Earning {rate_for(start, on) * 40:g} hours per 40 worked, up to 40 hours a week; overtime doesn't earn PTO ({years_of_service(start, on):.1f} years of service)."
     return {"agent": agent, "balance": bal, "available": round(bal - abs(pending), 2), "pending_use": round(abs(pending), 2),
             "cap": CAP_HOURS, "start_date": start.isoformat() if start else None, "eligible_from": elig.isoformat() if elig else None,
             "years": round(years_of_service(start, on), 2) if start else None,
@@ -278,8 +311,8 @@ def projected(conn, agent: str, on: date) -> dict:
     """What the balance should be on `on`: today's balance (approved future
     PTO is already off it), minus requests still pending, plus what the agent
     will earn between now and the day before `on` at their recent pace
-    (average daily hours over the last 8 weeks x their rate), honouring
-    probation and, from 2027, the cap. A projection, not a promise."""
+    (average daily hours over the last 8 weeks, no more than 40 a week,
+    x their rate), honouring probation and, from 2027, the cap. A projection, not a promise."""
     ensure(conn)
     today = datetime.now(timezone.utc).astimezone(PACIFIC).date()
     bal = balance(conn, agent)
@@ -324,7 +357,8 @@ def projected(conn, agent: str, on: date) -> dict:
         iso = d.isoformat()
         run += future.pop(iso, 0.0) + pend_on.pop(iso, 0.0)
         if start and ft and elig and d >= elig:
-            earn = daily * rate_for(start, d)
+            pace = min(daily, WEEKLY_CAP_HOURS / 7) if d >= WEEKLY_CAP_FROM else daily   # overtime doesn't earn
+            earn = pace * rate_for(start, d)
             if d >= CAP_EFFECTIVE:
                 earn = min(earn, max(0.0, CAP_HOURS - run))
             earn = max(0.0, earn)

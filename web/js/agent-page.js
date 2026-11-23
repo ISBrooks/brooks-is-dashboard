@@ -646,8 +646,8 @@ async function loadMyPto(asQ) {
     `<div class="pto-lbl" style="margin-top:6px">Start date</div><div style="font-size:14px">${fmtD(d.start_date)}</div></div>` +
     `<div class="pto-detail"><span class="pto-status ${d.status === "accruing" ? "accruing" : d.status === "probation" ? "probation" : d.status === "at cap" ? "cap" : ""}">${d.status}</span><br>${d.detail} ` +
     `${new Date() >= new Date("2027-01-01T00:00:00") ? `Balance is capped at ${d.cap} hours.` : `The ${d.cap}-hour cap starts Jan 1, 2027.`}</div>`;
-  noteInto("#me-pto", "PTO per company policy 4-09: full-time agents (30+ hours a week) earn 2 hours per 80 worked in their first two years and 3 per 80 after, " +
-    "starting 180 days after their start date. From Jan 1, 2027 the balance is capped at 80 hours (anything above 80 that day is cut to 80); until then there's no cap. Only hours actually worked earn PTO: the dashboard time clock from Oct 26, 2026 (each finished day). " +
+  noteInto("#me-pto", "PTO per company policy 4-09: full-time agents (30+ hours a week) earn 1 hour per 40 worked in their first two years and 1.5 per 40 after, " +
+    "starting 180 days after their start date. From Jan 1, 2027 the balance is capped at 80 hours (anything above 80 that day is cut to 80); until then there's no cap. Only hours actually worked earn PTO: the dashboard time clock from Oct 26, 2026 (each finished day). From the week of Nov 22, 2026, only the first 40 hours worked in a Sunday–Saturday week earn PTO; overtime hours don't. " +
     "Balances were carried over from Homebase as of Oct 25, 2026.", true);
 }
 
