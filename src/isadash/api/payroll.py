@@ -84,12 +84,23 @@ def api_commissions_roster_save(body: dict, request: Request) -> dict:
                          (raw or None, name))
         else:
             role = body.get("role")
-            if role not in ("inbound", "outbound"):
-                return {"error": "role must be inbound or outbound"}
+            if role not in ("inbound", "outbound", "manager"):
+                return {"error": "role must be inbound, outbound or manager"}
+            prev = conn.execute("SELECT role FROM commission_roster WHERE name = ?",
+                                (name,)).fetchone()
             conn.execute(
                 """INSERT INTO commission_roster (name, role) VALUES (?, ?)
                    ON CONFLICT(name) DO UPDATE SET role = excluded.role""",
                 (name, role))
+            if role == "manager" and (prev is None or prev["role"] != "manager"):
+                # RULES §14: a manager is paid on sales whose first service is
+                # paid on/after this date — the first day of the current pay
+                # period, so making someone a manager never back-pays old sales.
+                # Editable afterwards (the date box).
+                closed_end, _start, _running_end = _payroll_periods()
+                from datetime import timedelta as _td
+                conn.execute("UPDATE commission_roster SET start_date = ? WHERE name = ?",
+                             ((closed_end + _td(days=1)).isoformat(), name))
         conn.commit()
         logging.getLogger("isadash.commissions").info(
             "commission roster: %s -> %s", name,
@@ -250,9 +261,11 @@ def _sheet_fill(ws, header: list, rows: list, money_cols: tuple = (),
     ws.freeze_panes = ws.cell(row=2, column=1).coordinate
 
 
-def _week_summary(ws, reps, pos, neg, wpos, wneg, labels) -> None:
+def _week_summary(ws, reps, pos, neg, wpos, wneg, labels, managers=()) -> None:
     """Summary with each week's commissions / deductions / total per rep, then
-    the pay period (commissions RULES §7 weekly split)."""
+    the pay period (commissions RULES §7 weekly split). Managers (RULES §14,
+    flat 5%) get their own block under the inside-sales TOTAL, then a payroll
+    total of both."""
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
     HDR = Font(name="Arial", size=10, bold=True, color="FFFFFF")
@@ -270,20 +283,39 @@ def _week_summary(ws, reps, pos, neg, wpos, wneg, labels) -> None:
             if row == 1:
                 cell.alignment = Alignment(horizontal="center")
     R = lambda v: round(v, 2)  # noqa: E731
-    tot = [0.0] * 9
-    for rep in reps:
-        p1, n1 = R(wpos[1].get(rep, 0)), R(wneg[1].get(rep, 0))
-        p2, n2 = R(wpos[2].get(rep, 0)), R(wneg[2].get(rep, 0))
-        p, n = R(pos.get(rep, 0)), R(neg.get(rep, 0))
-        vals = [p1, n1, R(p1 + n1), p2, n2, R(p2 + n2), p, n, R(p + n)]
-        tot = [a + b for a, b in zip(tot, vals)]
-        ws.append([rep] + vals)
-    ws.append(["TOTAL"] + [R(v) for v in tot])
+    BOLD = Font(name="Arial", size=10, bold=True)
+
+    def block(names, label):
+        tot = [0.0] * 9
+        for rep in names:
+            p1, n1 = R(wpos[1].get(rep, 0)), R(wneg[1].get(rep, 0))
+            p2, n2 = R(wpos[2].get(rep, 0)), R(wneg[2].get(rep, 0))
+            p, n = R(pos.get(rep, 0)), R(neg.get(rep, 0))
+            vals = [p1, n1, R(p1 + n1), p2, n2, R(p2 + n2), p, n, R(p + n)]
+            tot = [a + b for a, b in zip(tot, vals)]
+            ws.append([rep] + vals)
+        ws.append([label] + [R(v) for v in tot])
+        for cell in ws[ws.max_row]:
+            cell.font = BOLD
+        return tot
+
+    isa_tot = block(reps, "TOTAL")
+    if managers:
+        ws.append([])
+        ws.append(["Managers — flat 5% once the first service is done and paid, "
+                   "never deducted"])
+        for c in range(1, 11):
+            cell = ws.cell(row=ws.max_row, column=c)
+            cell.font, cell.fill = HDR, FILL
+        mgr_tot = block(managers, "MANAGERS TOTAL")
+        ws.append([])
+        ws.append(["PAYROLL TOTAL (inside sales + managers)"]
+                  + [R(a + b) for a, b in zip(isa_tot, mgr_tot)])
+        for cell in ws[ws.max_row]:
+            cell.font = BOLD
     for row in ws.iter_rows(min_row=3):
         for cell in row[1:]:
             cell.number_format = MONEY
-    for cell in ws[ws.max_row]:
-        cell.font = Font(name="Arial", size=10, bold=True)
     for c in range(1, 11):
         ws.column_dimensions[get_column_letter(c)].width = 22 if c == 1 else 13
     ws.freeze_panes = "B3"
@@ -350,6 +382,22 @@ def api_commissions_report_xlsx(period: str):
             if r and r[0] and r[4] is not None:
                 dest.append([("" if v is None else v) for v in r[:len(hdr)]])
 
+    # RULES §14 managers (roster role 'manager'): their own Summary block, no
+    # rep sheet. By role, not by line: an ISA's line on an account that moved
+    # to a manager carries the account's manager flag too.
+    managers: set[str] = set()
+    try:
+        rconn = connect(_settings.db_path)
+        try:
+            # listed from their first pay period on (start date), even at $0
+            managers = {r["name"] for r in rconn.execute(
+                "SELECT name, start_date FROM commission_roster WHERE role = 'manager'")
+                if not r["start_date"] or str(r["start_date"])[:10] <= period}
+        finally:
+            rconn.close()
+    except Exception:                         # noqa: BLE001 — best effort
+        managers = set()
+
     wb = Workbook()
     summary = wb.active
     summary.title = "Summary"
@@ -371,10 +419,12 @@ def api_commissions_report_xlsx(period: str):
         for rows, acc in ((comm_rows, wpos), (ded_rows, wneg)):
             for r in rows:
                 acc[1 if str(r[wk_i]) == "1" else 2][r[0]] += float(r[4])
-        _week_summary(summary, sorted(set(pos) | set(neg)), pos, neg, wpos, wneg,
+        _week_summary(summary, sorted((set(pos) | set(neg)) - managers), pos, neg,
+                      wpos, wneg,
                       [f"Week 1 · Sun {md(wk_dates[0][0])} – Sat {md(wk_dates[0][1])}",
                        f"Week 2 · Sun {md(wk_dates[1][0])} – Sat {md(wk_dates[1][1])}",
-                       f"Pay period · {md(start)} – {md(end)}"])
+                       f"Pay period · {md(start)} – {md(end)}"],
+                      managers=sorted(managers))
     else:                                    # a statement from before the weekly split
         srows, tp, tn = [], 0.0, 0.0
         for rep in sorted(set(pos) | set(neg)):
@@ -418,7 +468,8 @@ def api_commissions_report_xlsx(period: str):
                 widths={1: 11, 2: 15, 3: 24, 4: 12, 5: 24, 6: 12})
 
     # one sheet per rep: their commissions, a spacer row, their deductions
-    for rep in sorted(set(pos) | set(neg)):
+    # (managers have none — low volume, the Summary block is enough)
+    for rep in sorted((set(pos) | set(neg)) - managers):
         safe = _re.sub(r"[\\/*?\[\]:]", "", rep)[:31]
         ws = wb.create_sheet(safe)
         mine_c = [r for r in comm_rows if r[0] == rep]

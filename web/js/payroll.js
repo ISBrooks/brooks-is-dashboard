@@ -445,7 +445,7 @@ function bindCrSearch() {
       row.className = "set-result cr-result";
       row.innerHTML = `<span>${s.name}</span><span class="cr-result-btns"></span>`;
       const btns = row.querySelector(".cr-result-btns");
-      for (const role of ["inbound", "outbound"]) {
+      for (const role of ["inbound", "outbound", "manager"]) {
         const b = document.createElement("button");
         b.className = "nav-btn";
         b.textContent = "+ " + role;
@@ -482,7 +482,7 @@ function renderCrTable() {
     "<th title='Inside-sales start date. Sales under this agent&#39;s PestRoutes logins dated earlier (e.g. retention work) are not commissioned.'>ISA start</th>" +
     "<th>Added</th><th></th></tr></thead>";
   const tb = document.createElement("tbody");
-  const order = { inbound: 0, outbound: 1 };
+  const order = { inbound: 0, outbound: 1, manager: 2 };
   for (const a of CR.roster.slice().sort((x, y) =>
       (order[x.role] - order[y.role]) || x.name.localeCompare(y.name))) {
     const tr = document.createElement("tr");
@@ -490,7 +490,7 @@ function renderCrTable() {
     const tdRole = document.createElement("td");
     const sel = document.createElement("select");
     sel.className = "cr-role";
-    for (const role of ["inbound", "outbound"]) {
+    for (const role of ["inbound", "outbound", "manager"]) {
       const o = document.createElement("option");
       o.value = role; o.textContent = role[0].toUpperCase() + role.slice(1);
       if (role === a.role) o.selected = true;
@@ -501,7 +501,9 @@ function renderCrTable() {
     const tdStart = document.createElement("td");
     const sd = document.createElement("input");
     sd.type = "date"; sd.className = "cr-start"; sd.value = a.start_date || "";
-    sd.title = "Leave blank if every sale under this agent counts";
+    sd.title = a.role === "manager"
+      ? "Paid on sales whose first service is paid on or after this date"
+      : "Leave blank if every sale under this agent counts";
     sd.addEventListener("change", () => saveCrEntry({ name: a.name, start_date: sd.value }));
     tdStart.appendChild(sd); tr.appendChild(tdStart);
     tr.insertAdjacentHTML("beforeend", `<td class="dim">${a.added || ""}</td>`);

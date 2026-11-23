@@ -75,10 +75,12 @@ CREATE TABLE IF NOT EXISTS app_config (
 -- actively calculates for, and how. Independent of agent_map on purpose —
 -- outbound agents belong here without appearing on the performance tabs.
 -- role: 'inbound' (full ISA commission) | 'outbound' (3%; the inbound agent
--- keeps rate minus 3% on shared accounts).
+-- keeps rate minus 3% on shared accounts) | 'manager' (flat 5% once a sale's
+-- first service is done and paid, never deducted — commissions RULES §14).
+-- The commission engine reads this table as its roster (who is paid at all).
 CREATE TABLE IF NOT EXISTS commission_roster (
     name     TEXT PRIMARY KEY,
-    role     TEXT NOT NULL CHECK (role IN ('inbound', 'outbound')),
+    role     TEXT NOT NULL CHECK (role IN ('inbound', 'outbound', 'manager')),
     added_at TEXT NOT NULL DEFAULT (datetime('now')),
     start_date TEXT    -- inside-sales start (YYYY-MM-DD); earlier sales under
                        -- the agent's FR ids are not ISA sales (RULES §1a)
@@ -213,6 +215,26 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "start_date" not in have_cr:
         # the commission engine reads this (read-only) for RULES §1a
         conn.execute("ALTER TABLE commission_roster ADD COLUMN start_date TEXT")
+    cr_sql = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' "
+                          "AND name = 'commission_roster'").fetchone()
+    if cr_sql and "'manager'" not in (cr_sql[0] or ""):
+        # the 'manager' role (commissions RULES §14, 2026-11-23): SQLite can't
+        # change a CHECK constraint, so the table is copied into a new one
+        conn.commit()
+        conn.executescript("""
+            BEGIN IMMEDIATE;
+            CREATE TABLE commission_roster_new (
+                name     TEXT PRIMARY KEY,
+                role     TEXT NOT NULL CHECK (role IN ('inbound', 'outbound', 'manager')),
+                added_at TEXT NOT NULL DEFAULT (datetime('now')),
+                start_date TEXT
+            );
+            INSERT INTO commission_roster_new (name, role, added_at, start_date)
+                SELECT name, role, added_at, start_date FROM commission_roster;
+            DROP TABLE commission_roster;
+            ALTER TABLE commission_roster_new RENAME TO commission_roster;
+            COMMIT;
+        """)
     have_am = {r[1] for r in conn.execute("PRAGMA table_info(agent_map)")}
     # These four were added to the live database by hand long ago and no code
     # created them, so a brand-new database (tests, a rebuild) couldn't run the
