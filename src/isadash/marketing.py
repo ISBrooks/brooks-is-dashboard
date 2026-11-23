@@ -502,7 +502,10 @@ def _spend_sheet(settings) -> dict:
 def _load_spend_map(path: str) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     p = _Path(path)
-    if not path or not p.exists():
+    if not path:
+        return out
+    cache.depend_on_file(path)        # an edit to the map refreshes the saved Spend & ROAS numbers
+    if not p.exists():
         return out
     with p.open(encoding="utf-8-sig") as f:
         for row in _csv.DictReader(f):

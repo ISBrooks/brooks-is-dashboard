@@ -8,9 +8,11 @@ name,channel
 #
 # --- not on the sourcing sheet with a channel (Dallin, 2026-10-05) ---
 ChatGPT Ads,Paid
-# Source 40 (567-261-4119), added 2026-11-12. It already inherits this channel from
-# its group (Baton); named here so it keeps it if it is ever given its own group.
+# Source 40 (567-261-4119), added 2026-11-12. Its own group ("Service Pros") since
+# 2026-11-23 (config/source_group_overrides.csv), so the provider name and the
+# group name are both listed.
 Service Pros (Baton),Affiliate Marketing
+Service Pros,Affiliate Marketing
 #
 # --- Generic = process-style sources, not a marketing channel ---
 (no source),Generic

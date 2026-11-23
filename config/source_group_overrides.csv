@@ -10,3 +10,9 @@ source,provider,group
 # Bing has its own spend line on the spend sheet, so it is its own group here
 # instead of folding into Eforce (Dallin, 2026-10-08).
 ,Bing,Bing
+#
+# Service Pros (Source 40, 567-261-4119, live 2026-11-12) has its own spend line
+# on the spend sheet, so it is its own group here instead of folding into Baton,
+# where the sourcing app's file puts it (Dallin, 2026-11-23). Both the PestRoutes
+# label and the provider name are listed so neither is left pointing at Baton.
+Source 40,Service Pros (Baton),Service Pros
