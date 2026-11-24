@@ -206,15 +206,25 @@ def _mark_pre_go_live(wb) -> None:
     and the workbook title."""
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.cell_range import CellRange
     ws = wb["Summary"]
+    # insert_rows moves values but not merged ranges: take the merges off,
+    # insert the banner row, then put each merge back one row lower (else the
+    # banner's merge overlaps the week headers and Excel "repairs" the file)
+    merged = [CellRange(str(m)) for m in ws.merged_cells.ranges]
+    for m in merged:
+        ws.unmerge_cells(m.coord)
     ws.insert_rows(1)
+    for m in merged:
+        m.shift(row_shift=1)
+        ws.merge_cells(m.coord)
     ws.merge_cells(f"A1:{get_column_letter(max(ws.max_column, 4))}1")
     ws["A1"] = PRE_GO_LIVE_BANNER
     ws["A1"].font = Font(name="Arial", size=11, bold=True, color="9C0006")
     ws["A1"].fill = PatternFill("solid", fgColor="FFC7CE")
     ws["A1"].alignment = Alignment(wrap_text=True, vertical="center")
     ws.row_dimensions[1].height = 30
-    ws.freeze_panes = "A4" if ws.max_column > 4 else "A3"   # two header rows when split by week
+    ws.freeze_panes = "B4" if merged else "A3"   # two header rows when split by week
     for sh in wb.worksheets:
         sh.sheet_properties.tabColor = "C00000"
     wb.properties.title = PRE_GO_LIVE_BANNER
@@ -265,8 +275,9 @@ def _week_summary(ws, reps, pos, neg, wpos, wneg, labels, managers=(), hours=Non
     """Summary with each week's commissions / deductions / total per rep, then
     the pay period (commissions RULES §7 weekly split). With `hours`
     ({1: {name: (regular, overtime, pto)}, 2: {...}}; Dallin 2026-11-23) each
-    week and the period also carry the rep's hours worked, overtime hours and
-    PTO hours from the time clock; someone the clock has nothing for (salaried)
+    week and the period also carry the rep's regular hours (worked minus
+    overtime, so regular + OT = hours worked), overtime hours and PTO hours
+    from the time clock; someone the clock has nothing for (salaried)
     shows blanks. Managers (RULES §14, flat 5%) get their own block under the
     inside-sales TOTAL, then a payroll total of both."""
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -278,7 +289,7 @@ def _week_summary(ws, reps, pos, neg, wpos, wneg, labels, managers=(), hours=Non
     with_h = hours is not None
     per = 6 if with_h else 3                      # columns per group
     heads = ["Commissions", "Deductions", "Total"] + (
-        ["Hours", "OT Hours", "PTO Hours"] if with_h else [])
+        ["Regular Hours", "OT Hours", "PTO Hours"] if with_h else [])
     ncol = 1 + 3 * per
     row1 = [""]
     for lab in labels:
@@ -348,15 +359,37 @@ def _week_summary(ws, reps, pos, neg, wpos, wneg, labels, managers=(), hours=Non
             cell.number_format = HOURS if cell.column in hour_cols else MONEY
     for c in range(1, ncol + 1):
         ws.column_dimensions[get_column_letter(c)].width = (
-            22 if c == 1 else 11 if c in hour_cols else 13)
+            22 if c == 1 else 13)
     ws.freeze_panes = "B3"
+
+
+def _clock_to_roster(conn) -> dict[str, str]:
+    """Time-clock name -> Commission Roster name. The clock knows an agent by
+    their Genesys name; the roster (and so every money line) may use the
+    FieldRoutes spelling of the same person, which agent_map pairs with it.
+    Without this the person gets two Summary rows: money in one, hours in
+    the other. Names compare without case or extra spaces; the roster name
+    comes back the way the commissions app writes it (spaces collapsed)."""
+    norm = lambda n: " ".join((n or "").split()).casefold()  # noqa: E731
+    try:
+        roster = {norm(n): " ".join(n.split())
+                  for (n,) in conn.execute("SELECT name FROM commission_roster") if n}
+    except Exception:  # noqa: BLE001 - no roster table yet: names stay as they are
+        return {}
+    out: dict[str, str] = {}
+    for g, fr in conn.execute("SELECT genesys_name, fr_name FROM agent_map "
+                              "WHERE genesys_name IS NOT NULL"):
+        hit = roster.get(norm(g)) or roster.get(norm(fr))
+        if hit:
+            out[g] = hit
+    return out
 
 
 def _hours_by_week(wk_dates) -> tuple[dict, str | None]:
     """Hours for the payroll workbook (Dallin 2026-11-23): per Sun-Sat week,
     {name: (regular hours, overtime hours, PTO hours)} from the dashboard time
     clock - the same numbers as Managers -> Hours report (weekly overtime over
-    40, PTO taken on days in the week). Best effort: if the clock cannot be
+    40, PTO taken on days in the week), keyed by the name the money uses. Best effort: if the clock cannot be
     read the workbook still builds, with a note on the Summary."""
     from .. import timeclock
     out: dict[int, dict] = {1: {}, 2: {}}
@@ -364,10 +397,14 @@ def _hours_by_week(wk_dates) -> tuple[dict, str | None]:
         conn = connect(_settings.db_path)
         try:
             names = _roster_names(conn)
+            as_paid = _clock_to_roster(conn)
             for k, (a, b) in zip((1, 2), wk_dates):
                 rep = timeclock.hours_report(conn, _settings, a, b, names)
-                out[k] = {r["agent"]: (round(r["regular_h"], 2), round(r["weekly_ot_h"], 2),
-                                       round(r["pto_h"], 2)) for r in rep["agents"]}
+                for r in rep["agents"]:
+                    who = as_paid.get(r["agent"], r["agent"])
+                    prev = out[k].get(who, (0.0, 0.0, 0.0))
+                    out[k][who] = tuple(round(x + y, 2) for x, y in zip(
+                        prev, (r["regular_h"], r["weekly_ot_h"], r["pto_h"])))
         finally:
             conn.close()
     except Exception as e:  # noqa: BLE001 - the money columns must still go out
@@ -550,7 +587,7 @@ def api_commissions_report_xlsx(period: str):
                      f"total ${wpos[k].get(rep, 0) + wneg[k].get(rep, 0):,.2f}")
                 h = hours.get(k, {}).get(rep)
                 if h:
-                    s += f"; hours {h[0]:.2f}, OT {h[1]:.2f}, PTO {h[2]:.2f}"
+                    s += f"; regular hours {h[0]:.2f}, OT {h[1]:.2f}, PTO {h[2]:.2f}"
                 return s
             ws.append([" · ".join(_wk(k, a, b) for k, (a, b) in zip((1, 2), wk_dates))])
         ws.append([])
